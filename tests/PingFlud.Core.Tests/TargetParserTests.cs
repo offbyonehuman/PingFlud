@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using PingFlud.Core;
 using Xunit;
 namespace PingFlud.Core.Tests;
@@ -30,5 +33,123 @@ public class SettingsTests
  [Fact] public void SortsNaturalTargetNames(){var values=new[]{"router10","router2","router1"};Assert.Equal(new[]{"router1","router2","router10"},values.OrderBy(x=>x,NetworkAddressComparer.Instance));}
  [Fact] public void BuildsCsvReport(){var rows=new[]{new ScanResult("192.168.1.1",true,4,"router","192.168.1.1","Responding",2,2,0,64)};var csv=CsvReport.Create(rows);Assert.Contains("Target,Responding,LatencyMs",csv);Assert.Contains("192.168.1.1,True,4",csv);Assert.EndsWith("\r\n",csv);}
  [Fact] public async Task ScannerCanPingLoopback(){var rows=new List<ScanResult>();await new PingScanner().ScanAsync(new[]{"127.0.0.1"},new ScanSettings{TimeoutMs=2000},new ImmediateProgress<ScanResult>(rows.Add),CancellationToken.None);var row=Assert.IsType<ScanResult>(rows.First());Assert.True(row.Responding);Assert.Equal(1,row.Successes);Assert.Equal(0,row.PacketLossPercent);Assert.InRange(rows.Count,1,2);}
- private sealed class ImmediateProgress<T>(Action<T> action):IProgress<T>{public void Report(T value)=>action(value);}
-}
+
+ [Fact]
+ public async Task ScannerTriesAllResolvedAddressesUntilOneResponds()
+ {
+     var fakeResolver = new FakeDnsResolver(["10.0.0.1", "127.0.0.1"]);
+     var fakeProbe = new FakePingProbe(ip => ip.ToString() == "10.0.0.1" ? null : new IPingProbe.Ipv4Reply(IPStatus.Success, 5, 128));
+     var scanner = new PingScanner(fakeResolver, fakeProbe);
+     var results = new Dictionary<string, ScanResult>();
+     var progress = new Progress<ScanResult>(r => results[r.Target] = r);
+     await scanner.ScanAsync(new[] { "host.example" }, new ScanSettings { TimeoutMs = 2000 }, progress, CancellationToken.None);
+     var row = Assert.Single(results.Values);
+     Assert.True(row.Responding);
+     Assert.Equal("127.0.0.1", row.Address);
+ }
+
+ [Fact]
+ public async Task ScannerSkipsReverseDnsForNonRespondingHosts()
+ {
+     var fakeResolver = new FakeDnsResolver(["192.168.1.1"]);
+     var fakeProbe = new FakePingProbe(ip => null);
+     var scanner = new PingScanner(fakeResolver, fakeProbe);
+     var rows = new List<ScanResult>();
+     await scanner.ScanAsync(new[] { "non-responding.example" }, new ScanSettings { TimeoutMs = 2000, ResolveRespondingOnly = true }, new Progress<ScanResult>(rows.Add), CancellationToken.None);
+     var row = Assert.Single(rows);
+     Assert.False(row.Responding);
+     Assert.False(fakeResolver.DnsCalled, "Reverse DNS should not be called for non-responding hosts");
+ }
+
+ [Fact]
+ public async Task ScannerEnforcesDnsTimeout()
+ {
+     var fakeResolver = new FakeDnsResolver(["127.0.0.1"]);
+     var fakeProbe = new FakePingProbe(ip => new IPingProbe.Ipv4Reply(IPStatus.Success, 1, 64));
+     fakeResolver.HangOnReverseDns = true;
+     var scanner = new PingScanner(fakeResolver, fakeProbe);
+     var rows = new List<ScanResult>();
+     var settings = new ScanSettings { TimeoutMs = 2000, DnsTimeoutMs = 100 };
+     await scanner.ScanAsync(new[] { "host.example" }, settings, new Progress<ScanResult>(rows.Add), CancellationToken.None);
+     var row = Assert.Single(rows);
+     // DNS timed out, so HostName should remain empty.
+     Assert.True(row.Responding);
+     Assert.Equal(string.Empty, row.HostName);
+     Assert.True(fakeResolver.DnsCalled, "Reverse DNS should have been attempted");
+ }
+
+ [Fact]
+ public async Task ScannerRespectsResolveRespondingOnlyFalse()
+ {
+     var fakeResolver = new FakeDnsResolver(["192.168.1.1"]);
+     var fakeProbe = new FakePingProbe(ip => null);
+     var scanner = new PingScanner(fakeResolver, fakeProbe);
+     var results = new Dictionary<string, ScanResult>();
+     var progress = new Progress<ScanResult>(r => results[r.Target] = r);
+     await scanner.ScanAsync(new[] { "non-responding.example" }, new ScanSettings { TimeoutMs = 2000, ResolveRespondingOnly = false }, progress, CancellationToken.None);
+     var row = Assert.Single(results.Values);
+     Assert.False(row.Responding);
+     // When ResolveRespondingOnly is false, even non-responding hosts get reverse DNS.
+     Assert.Equal("host-192.168.1.1", row.HostName);
+ }
+
+ [Fact]
+ public async Task ScannerPropagatesCancellationDuringDnsPhase()
+ {
+     var fakeResolver = new FakeDnsResolver(["127.0.0.1"]);
+     var fakeProbe = new FakePingProbe(ip => new IPingProbe.Ipv4Reply(IPStatus.Success, 1, 64));
+     fakeResolver.HangOnReverseDns = true;
+     var scanner = new PingScanner(fakeResolver, fakeProbe);
+     using var cts = new CancellationTokenSource();
+     var task = scanner.ScanAsync(new[] { "host.example" }, new ScanSettings { TimeoutMs = 2000, DnsTimeoutMs = 5000 }, new Progress<ScanResult>(r => { }), cts.Token);
+     await Task.Delay(50);
+     cts.Cancel();
+     await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task);
+ }
+
+ [Fact]
+ public void ScanSettingsValidatesDnsTimeoutBounds()
+ {
+     Assert.Throws<ArgumentOutOfRangeException>(() => new ScanSettings { DnsTimeoutMs = 0 }.Validate());
+     Assert.Throws<ArgumentOutOfRangeException>(() => new ScanSettings { DnsTimeoutMs = 31000 }.Validate());
+     new ScanSettings { DnsTimeoutMs = 1 }.Validate();
+     new ScanSettings { DnsTimeoutMs = 30000 }.Validate();
+ }
+
+ private sealed class ImmediateProgress<T>(Action<T> action) : IProgress<T> { public void Report(T value) => action(value); }
+ }
+
+ /// <summary>
+ /// Simple DNS resolver fake for testing PingScanner without network access.
+ /// </summary>
+ internal sealed class FakeDnsResolver(params string[] addresses) : IDnsResolver
+ {
+ public bool DnsCalled { get; set; }
+ public bool HangOnReverseDns { get; set; }
+ private readonly IPAddress[] _addresses = addresses.Select(IPAddress.Parse).ToArray();
+
+ public ValueTask<IPAddress[]> ResolveAddressesAsync(string host, CancellationToken ct) =>
+     new(_addresses);
+
+ public async ValueTask<IPHostEntry> GetHostEntryAsync(IPAddress address, CancellationToken ct)
+ {
+     DnsCalled = true;
+     if (HangOnReverseDns)
+     {
+         // Simulate a hanging DNS lookup that will be cancelled by the timeout.
+         await Task.Delay(30000, ct);
+         throw new OperationCanceledException(ct);
+     }
+     var entry = new IPHostEntry { HostName = $"host-{address}" };
+     return entry;
+ }
+ }
+
+ /// <summary>
+ /// Simple ICMP probe fake for testing PingScanner deterministically.
+ /// </summary>
+ internal sealed class FakePingProbe(Func<IPAddress, IPingProbe.Ipv4Reply?> respond) : IPingProbe
+ {
+ public ValueTask<IPingProbe.Ipv4Reply?> SendAsync(IPAddress address, int timeoutMs, byte[] payload, PingOptions options, CancellationToken ct) =>
+     new(respond(address));
+ }

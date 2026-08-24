@@ -29,6 +29,9 @@ public sealed class ScanSettings
     public int DelayMs { get; set; }
     public string Payload { get; set; } = "Ping Flud";
     public int ExpansionCap { get; set; } = 65_536;
+    public int DnsTimeoutMs { get; set; } = 2000;
+    public bool DontFragment { get; set; } = false;
+    public bool ResolveRespondingOnly { get; set; } = true;
 
     public void Validate()
     {
@@ -40,6 +43,7 @@ public sealed class ScanSettings
         if (Encoding.UTF8.GetByteCount(Payload ?? string.Empty) > 60_000)
             throw new ArgumentOutOfRangeException(nameof(Payload), "Payload exceeds 60,000 UTF-8 bytes.");
         if (ExpansionCap is < 1 or > 1_000_000) throw new ArgumentOutOfRangeException(nameof(ExpansionCap));
+        if (DnsTimeoutMs is < 1 or > 30_000) throw new ArgumentOutOfRangeException(nameof(DnsTimeoutMs));
     }
 }
 
@@ -66,8 +70,71 @@ public static class ExportFormatting
     }
 }
 
+/// <summary>
+/// Abstraction over DNS resolution so PingScanner can be tested with deterministic fakes.
+/// </summary>
+public interface IDnsResolver
+{
+    ValueTask<IPAddress[]> ResolveAddressesAsync(string host, CancellationToken ct);
+    ValueTask<IPHostEntry> GetHostEntryAsync(IPAddress address, CancellationToken ct);
+}
+
+/// <summary>
+/// Default DNS resolver that wraps the system <see cref="Dns"/> class.
+/// </summary>
+public sealed class SystemDnsResolver : IDnsResolver
+{
+    public static SystemDnsResolver Instance { get; } = new();
+
+    public async ValueTask<IPAddress[]> ResolveAddressesAsync(string host, CancellationToken ct) =>
+        await Dns.GetHostAddressesAsync(host).WaitAsync(ct);
+
+    public async ValueTask<IPHostEntry> GetHostEntryAsync(IPAddress address, CancellationToken ct) =>
+        await Dns.GetHostEntryAsync(address).WaitAsync(ct);
+}
+
+/// <summary>
+/// Abstraction over ICMP probing so PingScanner can be tested with deterministic fakes.
+/// </summary>
+public interface IPingProbe
+{
+    /// <summary>
+    /// Sends a single ICMP echo request to <paramref name="address"/> and returns the reply.
+    /// Returns <c>null</c> if the probe times out without a response.
+    /// </summary>
+    ValueTask<IPingProbe.Ipv4Reply?> SendAsync(IPAddress address, int timeoutMs, byte[] payload, PingOptions options, CancellationToken ct);
+
+    public sealed record Ipv4Reply(IPStatus Status, long RoundtripMs, int? Ttl);
+}
+
+/// <summary>
+/// Default ICMP probe that wraps <see cref="Ping"/>.
+/// </summary>
+public sealed class SystemPingProbe : IPingProbe
+{
+    public static SystemPingProbe Instance { get; } = new();
+
+    public async ValueTask<IPingProbe.Ipv4Reply?> SendAsync(IPAddress address, int timeoutMs, byte[] payload, PingOptions options, CancellationToken ct)
+    {
+        using var ping = new Ping();
+        var reply = await ping.SendPingAsync(address, timeoutMs, payload, options).WaitAsync(ct);
+        return reply.Status == IPStatus.TimedOut
+            ? null
+            : new IPingProbe.Ipv4Reply(reply.Status, reply.RoundtripTime, reply.Options?.Ttl);
+    }
+}
+
 public sealed class PingScanner
 {
+    private readonly IDnsResolver _resolver;
+    private readonly IPingProbe _probe;
+
+    public PingScanner(IDnsResolver? resolver = null, IPingProbe? probe = null)
+    {
+        _resolver = resolver ?? SystemDnsResolver.Instance;
+        _probe = probe ?? SystemPingProbe.Instance;
+    }
+
     public async Task ScanAsync(
         IEnumerable<string> targets,
         ScanSettings settings,
@@ -75,66 +142,81 @@ public sealed class PingScanner
         CancellationToken cancellationToken)
     {
         settings.Validate();
-        var pingOptions = new ParallelOptions
+        var scanOptions = new ParallelOptions
         {
             MaxDegreeOfParallelism = settings.MaxOutstanding,
             CancellationToken = cancellationToken
         };
-        var pingResults = new ConcurrentBag<ScanResult>();
+        var results = new ConcurrentBag<ScanResult>();
 
-        await Parallel.ForEachAsync(targets, pingOptions, async (target, ct) =>
+        await Parallel.ForEachAsync(targets, scanOptions, async (target, ct) =>
         {
             var result = await ProbeAsync(target, settings, ct);
-            pingResults.Add(result);
-            progress?.Report(result); // Reachability arrives before reverse DNS.
+            results.Add(result);
+            progress?.Report(result);
         });
+
+        // Phase 2: Reverse DNS
+        var dnsTargets = settings.ResolveRespondingOnly
+            ? results.Where(r => r.Responding && r.Address.Length > 0)
+            : results.Where(r => r.Address.Length > 0 || IPAddress.TryParse(r.Target, out _));
+
+        if (!dnsTargets.Any()) return;
 
         var dnsOptions = new ParallelOptions
         {
             MaxDegreeOfParallelism = Math.Min(32, settings.MaxOutstanding),
             CancellationToken = cancellationToken
         };
-        await Parallel.ForEachAsync(pingResults.Where(r => r.Address.Length > 0), dnsOptions, async (result, ct) =>
+        await Parallel.ForEachAsync(dnsTargets, dnsOptions, async (result, ct) =>
         {
             try
             {
-                var entry = await Dns.GetHostEntryAsync(IPAddress.Parse(result.Address)).WaitAsync(ct);
-                if (!string.IsNullOrWhiteSpace(entry.HostName)) progress?.Report(result with { HostName = entry.HostName });
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                linked.CancelAfter(settings.DnsTimeoutMs);
+                var entry = await _resolver.GetHostEntryAsync(IPAddress.Parse(result.Address), linked.Token);
+                if (!string.IsNullOrWhiteSpace(entry.HostName))
+                    progress?.Report(result with { HostName = entry.HostName });
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch { /* Reverse DNS is optional; the reachability result was already delivered. */ }
         });
     }
 
-    private static async ValueTask<ScanResult> ProbeAsync(string target, ScanSettings settings, CancellationToken ct)
+    private async ValueTask<ScanResult> ProbeAsync(string target, ScanSettings settings, CancellationToken ct)
     {
         try
         {
-            var addresses = await Dns.GetHostAddressesAsync(target, ct);
-            var address = addresses.FirstOrDefault() ?? throw new SocketException();
+            var addresses = await _resolver.ResolveAddressesAsync(target, ct);
+            if (addresses.Length == 0) throw new SocketException();
+
             long? best = null;
             IPStatus lastStatus = IPStatus.Unknown;
             var successes = 0;
             int? replyTtl = null;
             var payload = Encoding.UTF8.GetBytes(settings.Payload ?? string.Empty);
+            var pingOptions = new PingOptions(settings.Ttl, !settings.DontFragment);
+            var reachedAddress = string.Empty;
 
             for (var attempt = 0; attempt < settings.PingsPerNode; attempt++)
             {
                 ct.ThrowIfCancellationRequested();
-                using var ping = new Ping();
-                var reply = await ping.SendPingAsync(
-                        address,
-                        settings.TimeoutMs,
-                        payload,
-                        new PingOptions(settings.Ttl, true))
-                    .WaitAsync(ct);
-                lastStatus = reply.Status;
-                if (reply.Status == IPStatus.Success)
+                foreach (var candidate in addresses)
                 {
-                    successes++;
-                    best = Math.Min(best ?? long.MaxValue, reply.RoundtripTime);
-                    replyTtl = reply.Options?.Ttl;
+                    var reply = await _probe.SendAsync(candidate, settings.TimeoutMs, payload, pingOptions, ct);
+                    lastStatus = reply?.Status ?? IPStatus.TimedOut;
+                    if (reply is not null && reply.Status == IPStatus.Success)
+                    {
+                        successes++;
+                        best = Math.Min(best ?? long.MaxValue, reply.RoundtripMs);
+                        replyTtl = reply.Ttl;
+                        reachedAddress = candidate.ToString();
+                        goto addressesDone; // First responding address wins; stop trying other addresses.
+                    }
                 }
+                addressesDone:
+
+                if (successes > 0) break; // Target is reachable; no need for more attempts.
 
                 if (settings.DelayMs > 0 && attempt + 1 < settings.PingsPerNode)
                     await Task.Delay(settings.DelayMs, ct);
@@ -145,7 +227,7 @@ public sealed class PingScanner
                 successes > 0,
                 best,
                 string.Empty,
-                address.ToString(),
+                reachedAddress.Length > 0 ? reachedAddress : addresses.First().ToString(),
                 successes > 0 ? "Responding" : lastStatus.ToString(),
                 settings.PingsPerNode,
                 successes,

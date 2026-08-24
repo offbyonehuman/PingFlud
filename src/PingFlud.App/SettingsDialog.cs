@@ -64,7 +64,7 @@ internal sealed class SettingsDialog : Form
             BackColor = _theme.Surface,
             Padding = new Padding(18, 14, 18, 14),
             ColumnCount = 2,
-            RowCount = 9,
+            RowCount = 12,
             AutoScroll = true,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
@@ -80,6 +80,23 @@ internal sealed class SettingsDialog : Form
         var payload = CreateTextBox(_state.Settings.Payload);
         var title = CreateTextBox(_state.Title);
         var subtitle = CreateTextBox(_state.Subtitle);
+        var dnsTimeout = CreateNumeric(_state.Settings.DnsTimeoutMs, 1, 30000);
+        var dontFragment = new CheckBox
+        {
+            Text = "Don't Fragment (MTU testing)",
+            Checked = _state.Settings.DontFragment,
+            AutoSize = true,
+            ForeColor = _theme.Foreground,
+            BackColor = _theme.Surface
+        };
+        var resolveResponding = new CheckBox
+        {
+            Text = "Reverse DNS for responding hosts only",
+            Checked = _state.Settings.ResolveRespondingOnly,
+            AutoSize = true,
+            ForeColor = _theme.Foreground,
+            BackColor = _theme.Surface
+        };
 
         AddField(fields, 0, "Max outstanding packets", "Concurrent probes", maxOutstanding);
         AddField(fields, 1, "Timeout", "Milliseconds per ping", timeout);
@@ -90,6 +107,13 @@ internal sealed class SettingsDialog : Form
         AddField(fields, 6, "ICMP payload", "UTF-8 text, up to 60 KB", payload);
         AddField(fields, 7, "Window title", "Shown in the title bar", title);
         AddField(fields, 8, "Subtitle", "Shown below the product name", subtitle);
+        AddField(fields, 9, "DNS timeout", "Milliseconds per reverse DNS lookup", dnsTimeout);
+
+        // CheckBoxes span both columns
+        fields.Controls.Add(dontFragment, 0, 10);
+        fields.SetColumnSpan(dontFragment, 2);
+        fields.Controls.Add(resolveResponding, 0, 11);
+        fields.SetColumnSpan(resolveResponding, 2);
 
         var actions = new FlowLayoutPanel
         {
@@ -119,7 +143,10 @@ internal sealed class SettingsDialog : Form
                     Ttl = (int)ttl.Value,
                     DelayMs = (int)delay.Value,
                     ExpansionCap = (int)cap.Value,
-                    Payload = payload.Text
+                    Payload = payload.Text,
+                    DnsTimeoutMs = (int)dnsTimeout.Value,
+                    DontFragment = dontFragment.Checked,
+                    ResolveRespondingOnly = resolveResponding.Checked
                 };
                 candidate.Validate();
                 _state.Settings = candidate;

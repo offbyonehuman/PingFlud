@@ -460,29 +460,40 @@ public sealed class MainForm : Form
             _progress.Value = 0;
             _status.Text = "Scanning…";
             _summary.Text = $"0 / {_total}";
-            var indexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var responding = 0;
-            var nextRefresh = DateTime.MinValue;
-            var report = new Progress<ScanResult>(result =>
+            _source.RaiseListChangedEvents = false;
+            try
             {
-                var key = result.Target + "\0" + result.Address;
-                if (indexes.TryGetValue(key, out var index)) _allResults[index] = result;
-                else
+                var indexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var responding = 0;
+                var nextFilterRefresh = DateTime.MinValue;
+                var report = new Progress<ScanResult>(result =>
                 {
-                    indexes[key] = _allResults.Count;
-                    _allResults.Add(result);
-                    _completed++;
-                    if (result.Responding) responding++;
-                }
-                _progress.Value = Math.Min(100, _completed * 100 / _total);
-                _summary.Text = $"{_completed:N0} / {_total:N0}   •   {responding:N0} responding";
-                if (DateTime.UtcNow >= nextRefresh)
-                {
-                    ApplyFilter();
-                    nextRefresh = DateTime.UtcNow.AddMilliseconds(100);
-                }
-            });
-            await new PingScanner().ScanAsync(expanded, _state.Settings, report, _cancellation.Token);
+                    var key = result.Target + "\0" + result.Address;
+                    if (indexes.TryGetValue(key, out var index)) _allResults[index] = result;
+                    else
+                    {
+                        indexes[key] = _allResults.Count;
+                        _allResults.Add(result);
+                        _completed++;
+                        if (result.Responding) responding++;
+                    }
+                    _progress.Value = Math.Min(100, _completed * 100 / _total);
+                    _summary.Text = $"{_completed:N0} / {_total:N0}   •   {responding:N0} responding";
+                    if (DateTime.UtcNow >= nextFilterRefresh)
+                    {
+                        // Rebuild the filtered/sorted BindingList at an adaptive cadence instead
+                        // of on every result, to keep the UI responsive for large scans.
+                        ApplyFilter();
+                        nextFilterRefresh = DateTime.UtcNow.AddMilliseconds(250);
+                    }
+                });
+                await new PingScanner().ScanAsync(expanded, _state.Settings, report, _cancellation.Token);
+            }
+            finally
+            {
+                _source.RaiseListChangedEvents = true;
+                _source.ResetBindings(false);
+            }
             ApplyFilter();
             _status.Text = "Scan complete";
         }
@@ -508,6 +519,7 @@ public sealed class MainForm : Form
             2 => ResultFilter.NotResponding,
             _ => ResultFilter.All
         };
+
         IEnumerable<ScanResult> rows = ResultFilters.Apply(_allResults, selectedFilter, _search.Text);
         rows = _sortProperty switch
         {
@@ -522,7 +534,17 @@ public sealed class MainForm : Form
             nameof(ScanResult.HostName) => Sort(rows, row => row.HostName),
             _ => rows
         };
-        _source.DataSource = new BindingList<ScanResult>(rows.ToList());
+
+        // Reuse the same BindingList when possible to avoid full grid rebuilds.
+        if (_source.DataSource is BindingList<ScanResult> existing && existing.Count > 0)
+        {
+            existing.Clear();
+            foreach (var row in rows) existing.Add(row);
+        }
+        else
+        {
+            _source.DataSource = new BindingList<ScanResult>(rows.ToList());
+        }
     }
 
     private IEnumerable<ScanResult> Sort<TKey>(IEnumerable<ScanResult> rows, Func<ScanResult, TKey> key,
@@ -675,7 +697,7 @@ public sealed class MainForm : Form
 
     private List<ScanResult> CurrentRows() => _source.List.Cast<object>().OfType<ScanResult>().ToList();
 
-    private void Export(string kind)
+    private async void Export(string kind)
     {
         var rows = CurrentRows();
         if (rows.Count == 0)
@@ -693,30 +715,61 @@ public sealed class MainForm : Form
             Filter = $"{kind}|*.{extension}", FileName = $"ping-flud-{DateTime.Now:yyyyMMdd-HHmmss}.{extension}"
         };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        // Run the export on a background thread, writing to a temp file first,
+        // then atomically publishing to the user-chosen path.
+        var fileName = dialog.FileName;
+        _cancellation?.Cancel(); // Ensure no scan cancellation interferes with export.
+        _cancellation = new CancellationTokenSource();
+        var token = _cancellation.Token;
+        SetScanningState(true);
         try
         {
-            switch (kind)
+            _status.Text = "Exporting…";
+            var tempPath = Path.GetTempFileName();
+            try
             {
-                case "CSV": File.WriteAllText(dialog.FileName, CsvReport.Create(rows), new UTF8Encoding(true)); break;
-                case "XML":
-                    new XDocument(new XElement("PingFludResults", rows.Select(row => new XElement("Result",
-                        new XAttribute("target", row.Target), new XElement("Responding", row.Responding),
-                        new XElement("LatencyMs", row.RoundtripMs), new XElement("PacketLossPercent", row.PacketLossPercent),
-                        new XElement("Address", row.Address), new XElement("HostName", row.HostName),
-                        new XElement("Status", row.Status))))).Save(dialog.FileName);
-                    break;
-                case "HTML": File.WriteAllText(dialog.FileName, Html(rows, false), Encoding.UTF8); break;
-                case "XLS-compatible HTML": File.WriteAllText(dialog.FileName, Html(rows, true), Encoding.UTF8); break;
-                case "TXT": File.WriteAllLines(dialog.FileName,
-                    rows.Select(row => $"{row.Target}\t{row.Address}\t{row.HostName}\t{row.Status}\t{row.RoundtripMs}")); break;
-                case "PDF": SimplePdf.Write(dialog.FileName, rows); break;
-                case "PNG image": ExportImages(dialog.FileName, rows); break;
+                await Task.Run(() => WriteExport(kind, tempPath, rows), token);
+                File.Copy(tempPath, fileName, overwrite: true);
+                _status.Text = $"Exported {rows.Count:N0} result(s)";
             }
-            _status.Text = $"Exported {rows.Count:N0} result(s)";
+            finally
+            {
+                if (File.Exists(tempPath)) File.Delete(tempPath);
+            }
         }
+        catch (OperationCanceledException) { _status.Text = "Export cancelled"; }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "Export failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _status.Text = "Export failed";
+        }
+        finally
+        {
+            _cancellation?.Dispose();
+            _cancellation = null;
+            SetScanningState(false);
+        }
+    }
+
+    private void WriteExport(string kind, string path, List<ScanResult> rows)
+    {
+        switch (kind)
+        {
+            case "CSV": File.WriteAllText(path, CsvReport.Create(rows), new UTF8Encoding(true)); break;
+            case "XML":
+                new XDocument(new XElement("PingFludResults", rows.Select(row => new XElement("Result",
+                    new XAttribute("target", row.Target), new XElement("Responding", row.Responding),
+                    new XElement("LatencyMs", row.RoundtripMs), new XElement("PacketLossPercent", row.PacketLossPercent),
+                    new XElement("Address", row.Address), new XElement("HostName", row.HostName),
+                    new XElement("Status", row.Status))))).Save(path);
+                break;
+            case "HTML": File.WriteAllText(path, Html(rows, false), Encoding.UTF8); break;
+            case "XLS-compatible HTML": File.WriteAllText(path, Html(rows, true), Encoding.UTF8); break;
+            case "TXT": File.WriteAllLines(path,
+                rows.Select(row => $"{row.Target}\t{row.Address}\t{row.HostName}\t{row.Status}\t{row.RoundtripMs}")); break;
+            case "PDF": SimplePdf.Write(path, rows); break;
+            case "PNG image": ExportImages(path, rows); break;
         }
     }
 
@@ -743,7 +796,9 @@ public sealed class MainForm : Form
 
     private void ExportImages(string path, IReadOnlyList<ScanResult> rows)
     {
-        const int rowsPerImage = 1000, width = 1600, rowHeight = 24, headerHeight = 34;
+        // Cap rows per page so each bitmap stays under ~64 MiB (1600x2600 at 32bpp).
+        // 100 rows × 24px = 2400px height + 34px header = 2434px → ~15.6 MiB per page.
+        const int rowsPerImage = 100, width = 1600, rowHeight = 24, headerHeight = 34;
         var pageCount = (rows.Count + rowsPerImage - 1) / rowsPerImage;
         var directory = Path.GetDirectoryName(path)!;
         var stem = Path.GetFileNameWithoutExtension(path);
