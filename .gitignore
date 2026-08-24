@@ -1,0 +1,17 @@
+# .NET build outputs
+[Bb]in/
+[Oo]bj/
+artifacts/
+release/
+TestResults/
+
+# Visual Studio / user state
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local runtime state and logs
+*.log
+settings.json

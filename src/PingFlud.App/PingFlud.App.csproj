@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>PingFlud</AssemblyName>
+    <RootNamespace>PingFlud.App</RootNamespace>
+    <Version>1.4.1</Version>
+    <AssemblyVersion>1.4.1.0</AssemblyVersion>
+    <FileVersion>1.4.1.0</FileVersion>
+    <Authors>OffByOneHuman</Authors>
+    <Company>OffByOneHuman</Company>
+    <Product>Ping Flud</Product>
+    <AssemblyTitle>Ping Flud</AssemblyTitle>
+    <Description>Fast Windows network reachability scanner and report tool.</Description>
+    <Copyright>Copyright © 2026 OffByOneHuman</Copyright>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PingFlud.Core/PingFlud.Core.csproj" />
+  </ItemGroup>
+</Project>
