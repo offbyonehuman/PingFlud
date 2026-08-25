@@ -18,9 +18,10 @@ Ping Flud is an independent, MIT-licensed Windows network utility built from gen
 
 ### Sweep engine
 - Send ICMP echo requests concurrently, bounded by **Max outstanding packets**.
-- Expose ICMP timeout, pings per node, packet TTL, delay between pings, and payload.
+- Expose ICMP timeout, pings per node, packet TTL, delay between pings, payload, and don't-fragment option.
+- Try all resolved addresses (IPv4 and IPv6) in order until one responds.
 - Support cancellation and deterministic progress reporting.
-- Resolve reverse DNS names without blocking result delivery.
+- Resolve reverse DNS names without blocking result delivery; reverse DNS is scoped to responding hosts by default and uses a separate configurable timeout.
 - Record address, host name, state, response time, successes/attempts, packet loss, TTL when available, and error/status detail.
 - Filter results by Responding, Not Responding, or All.
 

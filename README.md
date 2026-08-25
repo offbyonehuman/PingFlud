@@ -80,6 +80,9 @@ Every range, CIDR, and wildcard expansion is constrained by **Expansion safety c
 | Delay between pings | Optional delay between attempts | 0 ms |
 | Expansion safety cap | Maximum generated targets | 65,536 |
 | ICMP payload | Text placed in each echo request | `Ping Flud` |
+| DNS timeout | Milliseconds per reverse DNS lookup | 2000 ms |
+| Don't Fragment | Sets the IP don't-fragment flag (MTU testing) | Off |
+| Reverse DNS responding only | Skip reverse DNS for non-responding hosts | On |
 
 ## Understanding results
 
@@ -95,7 +98,7 @@ A device can be online while blocking ICMP. “Not responding” means no ICMP r
 
 ## Themes
 
-Choose a theme from the header or **Theme** menu:
+Choose a theme from the **Theme** menu:
 
 - **Midnight** — dark teal surfaces with cyan accents
 - **Graphite** — neutral charcoal with blue accents

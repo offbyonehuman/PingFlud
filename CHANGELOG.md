@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Scanner reliability**: Reverse DNS is now scoped to responding hosts by default (configurable) with a separate DNS timeout, instead of running for every address.
+- **Dual-stack support**: The scanner now tries all resolved addresses (IPv4 and IPv6) in order until one responds, instead of using only the first resolved address.
+- **Payload safety**: ICMP echo requests now allow fragmentation by default; "Don't Fragment" is available as an explicit MTU-testing option in Settings.
+- **UI performance**: Scan progress updates no longer rebuild the entire results grid every 100 ms; change notifications are batched and the `BindingList` is reused.
+- **Background exports**: CSV, XML, HTML, PDF, PNG, TXT, and XLS exports now run on a background thread with a cancellation token; PNG page height is capped to prevent large-memory or GDI exhaustion.
+- **Testability**: `PingScanner` now accepts injectable `IDnsResolver` and `IPingProbe` interfaces, enabling deterministic unit tests without network I/O.
+- **Dependencies**: Updated `xunit` to 2.9.3 in test projects; no vulnerable packages found.
+- **Documentation**: Updated README, CHANGELOG, and PRODUCT_SPEC to reflect new settings and behavior.
+
 ## 1.4.1
 
 - Fixed rounded-button right and bottom edge clipping by correcting the control region bounds.
