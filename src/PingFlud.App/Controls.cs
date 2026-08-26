@@ -44,6 +44,13 @@ internal sealed class RoundedButton : Button
                  ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
     }
 
+    protected override bool ShowFocusCues => true;
+
+    /// <summary>
+    /// Exposes whether focus cues are shown, for accessibility verification and testing.
+    /// </summary>
+    public bool FocusCuesVisible => ShowFocusCues;
+
     public override Size GetPreferredSize(Size proposedSize)
     {
         var measured = TextRenderer.MeasureText(Text, Font);

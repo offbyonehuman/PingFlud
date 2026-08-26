@@ -85,6 +85,7 @@ public sealed class SettingsDialogTests
         Assert.NotEmpty(cards);
         Assert.All(cards, card => { Assert.True(card.CornerRadius >= 10); Assert.NotEqual(card.BackColor, card.GradientColor); });
         Assert.All(buttons, button => Assert.IsType<RoundedButton>(button));
+        Assert.All(buttons, button => Assert.True(((RoundedButton)button).FocusCuesVisible, "RoundedButton must show focus cues for accessibility"));
         Assert.Contains(buttons, button => button.Text.Contains("Scan workspace"));
         Assert.Contains(buttons, button => button.Text.Contains("Import list"));
         Assert.DoesNotContain(buttons, button => button.Text.Trim().EndsWith("Results"));
