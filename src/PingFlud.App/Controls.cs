@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Drawing.Drawing2D;
 
 namespace PingFlud.App;
@@ -63,11 +64,15 @@ internal sealed class RoundedButton : Button
     protected override void OnMouseUp(MouseEventArgs e) { _pressed = false; Invalidate(); base.OnMouseUp(e); }
     protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
 
+    // Modern button with gradient fill and layered shadow
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = UiGeometry.RoundedRectangle(bounds, CornerRadius);
+
+        // Determine the fill color based on state
         var fill = !Enabled
             ? BackColor
             : _pressed && FlatAppearance.MouseDownBackColor != Color.Empty
@@ -75,12 +80,24 @@ internal sealed class RoundedButton : Button
                 : _hovered && FlatAppearance.MouseOverBackColor != Color.Empty
                     ? FlatAppearance.MouseOverBackColor
                     : BackColor;
+
+        // Draw layered shadow for depth (offset, darker, semi-transparent)
+        using var shadowPath = UiGeometry.RoundedRectangle(
+            new Rectangle(bounds.X + 2, bounds.Y + 4, bounds.Width, bounds.Height), CornerRadius);
+        using var shadowBrush = new SolidBrush(Color.FromArgb(30, 0, 0, 0));
+        e.Graphics.FillPath(shadowBrush, shadowPath);
+
+        // Draw the button surface with a subtle vertical gradient
         var gradientEnd = Enabled ? ControlPaint.Light(fill, 0.08F) : fill;
         using var brush = new LinearGradientBrush(bounds, gradientEnd, fill, LinearGradientMode.Vertical);
-        using var pen = new Pen(FlatAppearance.BorderColor == Color.Empty ? fill : FlatAppearance.BorderColor);
         e.Graphics.FillPath(brush, path);
+
+        // Draw border
+        var borderColor = FlatAppearance.BorderColor == Color.Empty ? fill : FlatAppearance.BorderColor;
+        using var pen = new Pen(borderColor);
         e.Graphics.DrawPath(pen, path);
 
+        // Draw text with improved rendering
         var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
         flags |= TextAlign switch
         {
@@ -92,6 +109,8 @@ internal sealed class RoundedButton : Button
             ? new Rectangle(Padding.Left + 8, 0, Math.Max(1, Width - Padding.Left - Padding.Right - 12), Height)
             : Rectangle.Inflate(ClientRectangle, -4, 0);
         TextRenderer.DrawText(e.Graphics, Text, Font, textBounds, ForeColor, flags);
+
+        // Draw focus rectangle if focused
         if (Focused && ShowFocusCues)
             ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(bounds, -4, -4), ForeColor, fill);
     }
@@ -120,8 +139,8 @@ internal sealed class RoundedNumericUpDown : NumericUpDown
 
     public bool FocusCuesVisible => ShowFocusCues;
 
-    protected override void OnMouseEnter(EventArgs e) { _hovered = true; base.OnMouseEnter(e); }
-    protected override void OnMouseLeave(EventArgs e) { _hovered = false; base.OnMouseLeave(e); }
+    protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
     protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -130,7 +149,7 @@ internal sealed class RoundedNumericUpDown : NumericUpDown
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = UiGeometry.RoundedRectangle(bounds, CornerRadius);
 
-        // Draw rounded border with hover feedback.
+        // Draw rounded border with hover feedback
         var borderColor = _hovered && Enabled ? ControlPaint.Light(ForeColor, 0.1F) : ForeColor;
         using var pen = new Pen(borderColor);
         e.Graphics.DrawPath(pen, path);
@@ -164,13 +183,24 @@ internal sealed class CardPanel : Panel
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         e.Graphics.Clear(Parent?.BackColor ?? BackColor);
-        var shadowBounds = new Rectangle(3, 4, Math.Max(1, Width - 7), Math.Max(1, Height - 8));
+
+        // Layered shadow for depth (two shadow layers for softness)
+        var shadowOffset = new Point(0, 6);
+        var shadowBounds1 = new Rectangle(shadowOffset.X, shadowOffset.Y,
+            Math.Max(1, Width - 7), Math.Max(1, Height - 8));
+        var shadowBounds2 = new Rectangle(shadowOffset.X + 1, shadowOffset.Y + 2,
+            Math.Max(1, Width - 9), Math.Max(1, Height - 10));
+        using var shadowPath1 = UiGeometry.RoundedRectangle(shadowBounds1, CornerRadius);
+        using var shadowPath2 = UiGeometry.RoundedRectangle(shadowBounds2, CornerRadius);
+        using var softShadowBrush = new SolidBrush(Color.FromArgb(15, 0, 0, 0));
+        using var hardShadowBrush = new SolidBrush(Color.FromArgb(30, 0, 0, 0));
+        e.Graphics.FillPath(softShadowBrush, shadowPath2);
+        e.Graphics.FillPath(hardShadowBrush, shadowPath1);
+
+        // Draw the card body with gradient
         var bodyBounds = new Rectangle(0, 0, Math.Max(1, Width - 4), Math.Max(1, Height - 5));
-        using var shadowPath = UiGeometry.RoundedRectangle(shadowBounds, CornerRadius);
         using var bodyPath = UiGeometry.RoundedRectangle(bodyBounds, CornerRadius);
-        using var shadowBrush = new SolidBrush(ShadowColor);
         using var bodyBrush = new LinearGradientBrush(bodyBounds, GradientColor, BackColor, 105F);
-        e.Graphics.FillPath(shadowBrush, shadowPath);
         e.Graphics.FillPath(bodyBrush, bodyPath);
     }
 

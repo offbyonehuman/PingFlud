@@ -999,16 +999,29 @@ public sealed class MainForm : Form
         _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = _theme.SurfaceRaised, ForeColor = _theme.Foreground,
-            Font = new Font("Segoe UI Semibold", 8.5F), SelectionBackColor = _theme.SurfaceRaised
+            Font = new Font("Segoe UI Semibold", 8.5F), SelectionBackColor = _theme.SurfaceRaised,
+            Alignment = DataGridViewContentAlignment.MiddleLeft
         };
         _grid.DefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = _theme.Surface, ForeColor = _theme.Foreground,
             SelectionBackColor = _theme.Selection, SelectionForeColor = _theme.Foreground,
-            Padding = new Padding(3, 2, 3, 2)
+            Padding = new Padding(3, 2, 3, 2), Alignment = DataGridViewContentAlignment.MiddleLeft
         };
         _grid.AlternatingRowsDefaultCellStyle.BackColor = _theme.GridAlternate;
         _grid.RowTemplate.Height = 29;
+        _grid.RowTemplate.DefaultCellStyle.SelectionBackColor = _theme.Selection;
+        _grid.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.DisableResizing;
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.MultiSelect = true;
+        _grid.ReadOnly = true;
+        _grid.AllowUserToAddRows = false;
+        _grid.AllowUserToDeleteRows = false;
+        _grid.AutoGenerateColumns = false;
+        _grid.BorderStyle = BorderStyle.None;
+        _grid.RowHeadersVisible = false;
+        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.Invalidate();
     }
 }
