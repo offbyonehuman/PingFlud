@@ -64,11 +64,10 @@ internal sealed class RoundedButton : Button
     protected override void OnMouseUp(MouseEventArgs e) { _pressed = false; Invalidate(); base.OnMouseUp(e); }
     protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
 
-    // Modern Windows 11 style button with gradient fill, layered shadow, and accent support
+    // Modern Windows 11 style button with solid fill, clean hover/press states
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
         e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = UiGeometry.RoundedRectangle(bounds, CornerRadius);
@@ -93,30 +92,24 @@ internal sealed class RoundedButton : Button
                     : accent;
             textColor = GetContrastColor(accent);
             borderColor = fill;
-
-            // Draw Fluent shadow for elevated (accent) buttons
-            FluentHelpers.DrawFluentShadow(e.Graphics, bounds, CornerRadius);
         }
         else
         {
-            // Secondary button: subtle hover overlay over its own BackColor.
-            // NOTE: never use Color.Transparent here — WinForms fake transparency
-            // re-paints the parent's background (a gradient on CardPanel) at the
-            // wrong offset, producing ghost/duplicated text artifacts.
-            fill = _hovered && _pressed
-                ? Color.FromArgb(45, ForeColor.R, ForeColor.G, ForeColor.B)
+            // Secondary button: solid surface fill with distinct hover/press states
+            // Avoids semi-transparent overlays that cause ghosting on gradient parents
+            fill = _pressed
+                ? ControlPaint.Dark(BackColor, 0.1F)
                 : _hovered
-                    ? Color.FromArgb(25, ForeColor.R, ForeColor.G, ForeColor.B)
+                    ? ControlPaint.Light(BackColor, 0.06F)
                     : BackColor;
             textColor = ForeColor;
             borderColor = _hovered
-                ? Color.FromArgb(100, ForeColor.R, ForeColor.G, ForeColor.B)
-                : Color.FromArgb(50, ForeColor.R, ForeColor.G, ForeColor.B);
+                ? ControlPaint.Dark(BackColor, 0.2F)
+                : ControlPaint.Dark(BackColor, 0.1F);
         }
 
-        // Draw button surface with subtle gradient
-        var gradientEnd = fill == BackColor ? fill : ControlPaint.Light(fill, 0.04F);
-        using var brush = new LinearGradientBrush(bounds, gradientEnd, fill, LinearGradientMode.Vertical);
+        // Draw button surface (solid, no gradient to prevent artifacts)
+        using var brush = new SolidBrush(fill);
         e.Graphics.FillPath(brush, path);
 
         // Draw border (1px)
@@ -168,33 +161,6 @@ internal sealed class RoundedButton : Button
     }
 }
 
-/// <summary>
-/// Fluent Design shadow and theme helpers for Windows 11 styling.
-/// </summary>
-internal static class FluentHelpers
-{
-    public static void DrawFluentShadow(Graphics g, Rectangle bounds, int cornerRadius)
-    {
-        // Layer 1: soft outer shadow (12% opacity, offset 4px down)
-        using var path1 = UiGeometry.RoundedRectangle(
-            new Rectangle(bounds.X, bounds.Y + 4, bounds.Width + 2, bounds.Height + 2), cornerRadius);
-        using var brush1 = new SolidBrush(Color.FromArgb(12, 0, 0, 0));
-        g.FillPath(brush1, path1);
-
-        // Layer 2: medium shadow (8% opacity, offset 3px down)
-        using var path2 = UiGeometry.RoundedRectangle(
-            new Rectangle(bounds.X + 1, bounds.Y + 3, bounds.Width, bounds.Height), cornerRadius);
-        using var brush2 = new SolidBrush(Color.FromArgb(8, 0, 0, 0));
-        g.FillPath(brush2, path2);
-
-        // Layer 3: inner shadow (4% opacity, offset 2px down)
-        using var path3 = UiGeometry.RoundedRectangle(
-            new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 2, bounds.Height - 2), cornerRadius);
-        using var brush3 = new SolidBrush(Color.FromArgb(4, 0, 0, 0));
-        g.FillPath(brush3, path3);
-    }
-}
-
 internal sealed class RoundedNumericUpDown : NumericUpDown
 {
     // NumericUpDown is a native composite control; keep native painting so its
@@ -239,7 +205,6 @@ internal sealed class RoundedNumericUpDown : NumericUpDown
 internal sealed class CardPanel : Panel
 {
     public Color BorderColor { get; set; } = Color.Gray;
-    public Color GradientColor { get; set; } = Color.Gray;
     public int CornerRadius { get; set; } = 12;
 
     public CardPanel()
@@ -251,25 +216,9 @@ internal sealed class CardPanel : Panel
     protected override void OnPaintBackground(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        e.Graphics.Clear(Parent?.BackColor ?? BackColor);
-
-        // Layered shadow for depth (two shadow layers for softness)
-        var shadowOffset = new Point(0, 6);
-        var shadowBounds1 = new Rectangle(shadowOffset.X, shadowOffset.Y,
-            Math.Max(1, Width - 7), Math.Max(1, Height - 8));
-        var shadowBounds2 = new Rectangle(shadowOffset.X + 1, shadowOffset.Y + 2,
-            Math.Max(1, Width - 9), Math.Max(1, Height - 10));
-        using var shadowPath1 = UiGeometry.RoundedRectangle(shadowBounds1, CornerRadius);
-        using var shadowPath2 = UiGeometry.RoundedRectangle(shadowBounds2, CornerRadius);
-        using var softShadowBrush = new SolidBrush(Color.FromArgb(15, 0, 0, 0));
-        using var hardShadowBrush = new SolidBrush(Color.FromArgb(30, 0, 0, 0));
-        e.Graphics.FillPath(softShadowBrush, shadowPath2);
-        e.Graphics.FillPath(hardShadowBrush, shadowPath1);
-
-        // Draw the card body with gradient
-        var bodyBounds = new Rectangle(0, 0, Math.Max(1, Width - 4), Math.Max(1, Height - 5));
+        var bodyBounds = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
         using var bodyPath = UiGeometry.RoundedRectangle(bodyBounds, CornerRadius);
-        using var bodyBrush = new LinearGradientBrush(bodyBounds, GradientColor, BackColor, 105F);
+        using var bodyBrush = new SolidBrush(BackColor);
         e.Graphics.FillPath(bodyBrush, bodyPath);
     }
 
@@ -278,7 +227,7 @@ internal sealed class CardPanel : Panel
         base.OnPaint(e);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         using var path = UiGeometry.RoundedRectangle(
-            new Rectangle(0, 0, Math.Max(1, Width - 4), Math.Max(1, Height - 5)), CornerRadius);
+            new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1)), CornerRadius);
         using var pen = new Pen(BorderColor);
         e.Graphics.DrawPath(pen, path);
     }

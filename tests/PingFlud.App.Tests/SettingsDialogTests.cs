@@ -72,7 +72,7 @@ public sealed class SettingsDialogTests
         Assert.Contains(buttons, button => button.Text.Contains("Syntax help"));
         var cards = controls.OfType<CardPanel>().ToList();
         Assert.NotEmpty(cards);
-        Assert.All(cards, card => { Assert.True(card.CornerRadius >= 10); Assert.NotEqual(card.BackColor, card.GradientColor); });
+        Assert.All(cards, card => { Assert.True(card.CornerRadius >= 10); Assert.NotEqual(card.BackColor, card.BorderColor); });
         Assert.All(buttons, button => Assert.IsType<RoundedButton>(button));
         Assert.All(buttons, button => Assert.True(((RoundedButton)button).FocusCuesVisible, "RoundedButton must show focus cues for accessibility"));
         Assert.Contains(buttons, button => button.Text.Contains("Scan workspace"));

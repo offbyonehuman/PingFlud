@@ -1013,7 +1013,6 @@ public sealed class MainForm : Form
         foreach (var card in _cards)
         {
             card.BackColor = _theme.Surface;
-            card.GradientColor = _theme.IsDark ? ControlPaint.Light(_theme.Surface, 0.08F) : _theme.SurfaceRaised;
             card.BorderColor = _theme.Border;
             card.Invalidate();
         }
