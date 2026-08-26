@@ -276,7 +276,11 @@ public sealed class MainForm : Form
         _subtitleLabel.Location = new Point(2, 42);
         branding.Controls.AddRange([_titleLabel, _subtitleLabel]);
 
-        var buildLabel = TrackLabel($"v{Application.ProductVersion}  •  OffByOneHuman", new Font("Segoe UI Semibold Variable", 8.5F), true);
+        // Application.ProductVersion can include a long source-control suffix.
+        // Product metadata belongs in About; the header must remain a readable
+        // one-line identity at every supported window size.
+        var buildLabel = TrackLabel("Version 1.4.2  •  OffByOneHuman", new Font("Segoe UI Variable", 8.5F), true);
+        buildLabel.AutoSize = true;
         buildLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         buildLabel.Margin = new Padding(0, 27, 0, 0);
         buildLabel.TextAlign = ContentAlignment.MiddleRight;
@@ -353,16 +357,24 @@ public sealed class MainForm : Form
         secondary.Controls.Add(CreateButton("Copy", "secondary", (_, _) => CopySelected()), 3, 0);
         secondary.Controls.Add(CreateButton("Clear", "secondary", (_, _) => ClearResults()), 4, 0);
         secondary.Controls.Add(CreateButton("Export CSV", "primary", (_, _) => Export("CSV")), 5, 0);
-        var moreFormatsButton = CreateButton("More formats ▾", "secondary", (sender, _) => ShowExportMenu((Control)sender!));
-        moreFormatsButton.KeyDown += (_, e) =>
+        var moreFormats = new ComboBox
         {
-            if (e.KeyCode is Keys.Down or Keys.Space or Keys.Enter)
-            {
-                e.Handled = true;
-                ShowExportMenu(moreFormatsButton);
-            }
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            AccessibleName = "More export formats",
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4, 5, 0, 5)
         };
-        secondary.Controls.Add(moreFormatsButton, 6, 0);
+        moreFormats.Items.AddRange(["More formats…", "XML", "HTML", "PDF", "PNG image", "TXT", "XLS-compatible HTML"]);
+        moreFormats.SelectedIndex = 0;
+        moreFormats.SelectedIndexChanged += (_, _) =>
+        {
+            if (moreFormats.SelectedIndex <= 0) return;
+            var format = moreFormats.SelectedItem!.ToString()!;
+            BeginInvoke(() => moreFormats.SelectedIndex = 0);
+            Export(format);
+        };
+        _inputs.Add(moreFormats);
+        secondary.Controls.Add(moreFormats, 6, 0);
 
         layout.Controls.Add(primary, 0, 1);
         layout.Controls.Add(secondary, 0, 2);
@@ -655,7 +667,15 @@ public sealed class MainForm : Form
     internal ContextMenuStrip GetOrCreateExportMenu()
     {
         if (_exportMenu is not null) return _exportMenu;
-        _exportMenu = new ContextMenuStrip();
+        _exportMenu = new ContextMenuStrip
+        {
+            // The themed professional renderer is not composited correctly over
+            // the custom card surface on this WinForms/DWM combination. Use the
+            // native Windows menu renderer here: it is opaque, correctly layered,
+            // keyboard-accessible, and consistent with Windows 11 shell menus.
+            RenderMode = ToolStripRenderMode.System
+        };
+        _exportMenu.Closed += (_, _) => Invalidate();
         foreach (var format in new[] { "XML", "HTML", "PDF", "PNG image", "TXT", "XLS-compatible HTML" })
             _exportMenu.Items.Add(format, null, (_, _) => Export(format));
         return _exportMenu;
@@ -666,17 +686,18 @@ public sealed class MainForm : Form
         var menu = GetOrCreateExportMenu();
         menu.BackColor = _theme.Surface;
         menu.ForeColor = _theme.Foreground;
-        if (_exportMenuThemeName != _theme.Name)
-        {
-            menu.Renderer = new ToolStripProfessionalRenderer(new ThemeColorTable(_theme));
-            _exportMenuThemeName = _theme.Name;
-        }
+        _exportMenuThemeName = _theme.Name;
         foreach (ToolStripItem item in menu.Items)
         {
             item.BackColor = _theme.Surface;
             item.ForeColor = _theme.Foreground;
         }
-        menu.Show(anchor, new Point(0, anchor.Height));
+        // Screen coordinates avoid the owner-draw / nested-card coordinate
+        // translation bug that placed menu text over the trigger. Invalidate
+        // the anchor after closing so stale popup glyphs cannot remain painted.
+        menu.Show(anchor.PointToScreen(new Point(0, anchor.Height)), ToolStripDropDownDirection.BelowLeft);
+        menu.Invalidate();
+        menu.Update();
     }
 
     internal void SelectTheme(string name)
@@ -963,8 +984,8 @@ public sealed class MainForm : Form
                 continue;
             }
             var role = button.Tag?.ToString();
-            button.BackColor = role switch { "primary" => _theme.Accent, "danger" => _theme.Danger, _ => _theme.SurfaceRaised };
-            button.ForeColor = role switch { "primary" => _theme.AccentForeground, "danger" => Color.White, _ => _theme.Foreground };
+            button.BackColor = role switch { "primary" => _theme.Accent, "danger" => _theme.SurfaceRaised, _ => _theme.SurfaceRaised };
+            button.ForeColor = role switch { "primary" => _theme.AccentForeground, "danger" => _theme.Danger, _ => _theme.Foreground };
             button.FlatAppearance.BorderColor = role switch { "primary" => _theme.Accent, "danger" => _theme.Danger, _ => _theme.Border };
             button.FlatAppearance.MouseOverBackColor = role == "primary" ? ControlPaint.Light(_theme.Accent, .1F) : _theme.Selection;
         }

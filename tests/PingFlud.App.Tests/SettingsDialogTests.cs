@@ -91,6 +91,9 @@ public sealed class SettingsDialogTests
         Assert.DoesNotContain(buttons, button => button.Text.Trim().EndsWith("Results"));
         Assert.DoesNotContain(buttons, button => button.Text.Trim().EndsWith("Reports"));
         Assert.Contains(buttons, button => button.Text.Contains("Export CSV"));
+        var extraFormats = Assert.Single(controls.OfType<ComboBox>(), control => control.AccessibleName == "More export formats");
+        Assert.Equal("More formats…", extraFormats.Text);
+        Assert.Contains("PDF", extraFormats.Items.Cast<string>());
         var grid = Assert.Single(controls.OfType<DataGridView>());
         Assert.IsType<CardPanel>(grid.Parent);
         Assert.Equal(SortOrder.Ascending, grid.Columns["Address"].HeaderCell.SortGlyphDirection);
@@ -158,5 +161,47 @@ public sealed class SettingsDialogTests
         using var numeric = SettingsDialog.CreateNumeric(1000, 1, 120000);
         var rounded = Assert.IsType<RoundedNumericUpDown>(numeric);
         Assert.True(rounded.FocusCuesVisible, "NumericUpDown must show focus cues for accessibility");
+    }
+
+    [Fact]
+    public void SettingsDialogUsesTheActiveThemeForEveryEditableControl()
+    {
+        var theme = ThemeCatalog.Get("Midnight");
+        using var dialog = new SettingsDialog(new AppState(), theme);
+        dialog.CreateControl();
+
+        var editable = Descendants(dialog)
+            .Where(control => control is TextBox or NumericUpDown)
+            .ToList();
+
+        Assert.NotEmpty(editable);
+        Assert.All(editable, control =>
+        {
+            Assert.Equal(theme.SurfaceRaised, control.BackColor);
+            Assert.Equal(theme.Foreground, control.ForeColor);
+        });
+    }
+
+    [Fact]
+    public void SettingsDialogFitsAllSettingsWithoutRequiringItsOwnScrollBar()
+    {
+        using var dialog = new SettingsDialog(new AppState());
+        dialog.CreateControl();
+        dialog.PerformLayout();
+
+        Assert.DoesNotContain(Descendants(dialog), control => control is VScrollBar);
+    }
+
+    [Fact]
+    public void HeaderUsesAConciseSingleLineVersionLabel()
+    {
+        using var form = CreateMainForm();
+        var version = Descendants(form).OfType<Label>()
+            .Single(label => label.Text.StartsWith("Version ", StringComparison.Ordinal));
+
+        Assert.DoesNotContain('\n', version.Text);
+        Assert.DoesNotContain('\r', version.Text);
+        Assert.DoesNotContain('+', version.Text);
+        Assert.Equal(ContentAlignment.MiddleRight, version.TextAlign);
     }
 }

@@ -100,12 +100,15 @@ internal sealed class RoundedButton : Button
         }
         else
         {
-            // Secondary button: transparent with subtle hover overlay
+            // Secondary button: subtle hover overlay over its own BackColor.
+            // NOTE: never use Color.Transparent here — WinForms fake transparency
+            // re-paints the parent's background (a gradient on CardPanel) at the
+            // wrong offset, producing ghost/duplicated text artifacts.
             fill = _hovered && _pressed
                 ? Color.FromArgb(45, ForeColor.R, ForeColor.G, ForeColor.B)
                 : _hovered
                     ? Color.FromArgb(25, ForeColor.R, ForeColor.G, ForeColor.B)
-                    : Color.Transparent;
+                    : BackColor;
             textColor = ForeColor;
             borderColor = _hovered
                 ? Color.FromArgb(100, ForeColor.R, ForeColor.G, ForeColor.B)
@@ -113,9 +116,7 @@ internal sealed class RoundedButton : Button
         }
 
         // Draw button surface with subtle gradient
-        var gradientEnd = fill == BackColor || fill.ToArgb() == Color.Transparent.ToArgb()
-            ? fill
-            : ControlPaint.Light(fill, 0.04F);
+        var gradientEnd = fill == BackColor ? fill : ControlPaint.Light(fill, 0.04F);
         using var brush = new LinearGradientBrush(bounds, gradientEnd, fill, LinearGradientMode.Vertical);
         e.Graphics.FillPath(brush, path);
 
@@ -197,43 +198,46 @@ internal static class FluentHelpers
 
 internal sealed class RoundedNumericUpDown : NumericUpDown
 {
-    private bool _hovered;
+    // NumericUpDown is a native composite control. Owner-painting it leaves its
+    // hosted edit/spin-button windows in their default (white) state on Windows.
+    // Keep native painting so it respects Windows 11 metrics and theme the child
+    // windows explicitly whenever the palette changes.
     public int CornerRadius { get; set; } = 6;
 
     public RoundedNumericUpDown()
     {
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
-                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        BorderStyle = BorderStyle.FixedSingle;
     }
 
     protected override bool ShowFocusCues => true;
 
     public bool FocusCuesVisible => ShowFocusCues;
 
-    protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
-    protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
-    protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
-
-    protected override void OnPaint(PaintEventArgs e)
+    protected override void OnCreateControl()
     {
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = UiGeometry.RoundedRectangle(bounds, CornerRadius);
-
-        // Draw rounded border with hover feedback
-        var borderColor = _hovered && Enabled ? ControlPaint.Light(ForeColor, 0.1F) : ForeColor;
-        using var pen = new Pen(borderColor);
-        e.Graphics.DrawPath(pen, path);
-
-        base.OnPaint(e);
+        base.OnCreateControl();
+        ApplyChildColors();
     }
 
-    protected override void OnResize(EventArgs e)
+    protected override void OnBackColorChanged(EventArgs e)
     {
-        base.OnResize(e);
-        using var path = UiGeometry.RoundedRectangle(
-            new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1)), CornerRadius);
-        Region = new Region(path);
+        base.OnBackColorChanged(e);
+        ApplyChildColors();
+    }
+
+    protected override void OnForeColorChanged(EventArgs e)
+    {
+        base.OnForeColorChanged(e);
+        ApplyChildColors();
+    }
+
+    private void ApplyChildColors()
+    {
+        foreach (Control child in Controls)
+        {
+            child.BackColor = BackColor;
+            child.ForeColor = ForeColor;
+        }
     }
 }
 

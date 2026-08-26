@@ -13,8 +13,11 @@ internal sealed class SettingsDialog : Form
         _theme = theme ?? ThemeCatalog.Get(state.ThemeName);
 
         Text = "Scan settings";
-        Size = new Size(680, 720);
-        MinimumSize = new Size(640, 680);
+        // Keep every setting visible at the standard 100% desktop scale.
+        // A fixed dialog is preferable to an internal scroll bar because it
+        // preserves context between labels, hints, values, and the save action.
+        Size = new Size(700, 850);
+        MinimumSize = new Size(680, 820);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -72,22 +75,22 @@ internal sealed class SettingsDialog : Form
             Padding = new Padding(18, 14, 18, 14),
             ColumnCount = 2,
             RowCount = 12,
-            AutoScroll = true,
+            AutoScroll = false,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56));
 
-        var maxOutstanding = CreateNumeric(_state.Settings.MaxOutstanding, 1, 1024);
-        var timeout = CreateNumeric(_state.Settings.TimeoutMs, 1, 120000);
-        var pings = CreateNumeric(_state.Settings.PingsPerNode, 1, 10);
-        var ttl = CreateNumeric(_state.Settings.Ttl, 1, 255);
-        var delay = CreateNumeric(_state.Settings.DelayMs, 0, 60000);
-        var cap = CreateNumeric(_state.Settings.ExpansionCap, 1, 1000000);
+        var maxOutstanding = CreateNumeric(_state.Settings.MaxOutstanding, 1, 1024, _theme);
+        var timeout = CreateNumeric(_state.Settings.TimeoutMs, 1, 120000, _theme);
+        var pings = CreateNumeric(_state.Settings.PingsPerNode, 1, 10, _theme);
+        var ttl = CreateNumeric(_state.Settings.Ttl, 1, 255, _theme);
+        var delay = CreateNumeric(_state.Settings.DelayMs, 0, 60000, _theme);
+        var cap = CreateNumeric(_state.Settings.ExpansionCap, 1, 1000000, _theme);
         var payload = CreateTextBox(_state.Settings.Payload);
         var title = CreateTextBox(_state.Title);
         var subtitle = CreateTextBox(_state.Subtitle);
-        var dnsTimeout = CreateNumeric(_state.Settings.DnsTimeoutMs, 1, 30000);
+        var dnsTimeout = CreateNumeric(_state.Settings.DnsTimeoutMs, 1, 30000, _theme);
         var dontFragment = new CheckBox
         {
             Text = "Don't Fragment (MTU testing)",
@@ -230,8 +233,9 @@ internal sealed class SettingsDialog : Form
         return button;
     }
 
-    internal static RoundedNumericUpDown CreateNumeric(decimal value, decimal min, decimal max)
+    internal static RoundedNumericUpDown CreateNumeric(decimal value, decimal min, decimal max, ThemePalette? theme = null)
     {
+        theme ??= ThemeCatalog.Get(new AppState().ThemeName);
         var control = new RoundedNumericUpDown
         {
             Minimum = min,
@@ -239,7 +243,9 @@ internal sealed class SettingsDialog : Form
             ThousandsSeparator = true,
             Dock = DockStyle.Fill,
             Margin = new Padding(4, 7, 0, 7),
-            BorderStyle = BorderStyle.FixedSingle
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = theme.SurfaceRaised,
+            ForeColor = theme.Foreground
         };
         control.Value = Math.Clamp(value, min, max);
         return control;
