@@ -19,8 +19,10 @@
     <Copyright>Copyright © 2026 OffByOneHuman</Copyright>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
-    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishTrimmed>false</PublishTrimmed>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../PingFlud.Core/PingFlud.Core.csproj" />
