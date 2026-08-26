@@ -96,7 +96,7 @@ public sealed class MainForm : Form
         MinimumSize = new Size(1180, 720);
         Size = new Size(1420, 900);
         StartPosition = FormStartPosition.CenterScreen;
-        Font = new Font("Segoe UI", 9.5F);
+        Font = new Font("Segoe UI Variable", 9.5F);
         AutoScaleMode = AutoScaleMode.Dpi;
 
         BuildUi();
@@ -218,7 +218,7 @@ public sealed class MainForm : Form
             BackColor = Color.Transparent
         };
 
-        var brand = TrackLabel("◈  PING FLUD", new Font("Segoe UI Semibold", 13F));
+        var brand = TrackLabel("◈  PING FLUD", new Font("Segoe UI Semibold Variable", 13F));
         brand.Margin = new Padding(4, 2, 0, 24);
         flow.Controls.Add(brand);
         AddSidebarSection(flow, "WORKSPACE");
@@ -231,7 +231,7 @@ public sealed class MainForm : Form
             "Ping Flud 1.4.1\nDeveloper: OffByOneHuman\n\nOpen-source network reachability scanner.",
             "About Ping Flud", MessageBoxButtons.OK, MessageBoxIcon.Information)));
 
-        var authorization = TrackLabel("AUTHORIZED NETWORKS ONLY", new Font("Segoe UI Semibold", 7.5F), true);
+        var authorization = TrackLabel("AUTHORIZED NETWORKS ONLY", new Font("Segoe UI Semibold Variable", 7.5F), true);
         authorization.Margin = new Padding(4, 28, 0, 0);
         flow.Controls.Add(authorization);
         sidebar.Controls.Add(flow);
@@ -240,7 +240,7 @@ public sealed class MainForm : Form
 
     private void AddSidebarSection(FlowLayoutPanel flow, string text)
     {
-        var label = TrackLabel(text, new Font("Segoe UI Semibold", 7.8F), true);
+        var label = TrackLabel(text, new Font("Segoe UI Semibold Variable", 7.8F), true);
         label.Margin = new Padding(4, 12, 0, 6);
         flow.Controls.Add(label);
     }
@@ -263,13 +263,13 @@ public sealed class MainForm : Form
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
 
         var branding = new Panel { Dock = DockStyle.Fill };
-        _titleLabel.Font = new Font("Segoe UI Semibold", 24F);
+        _titleLabel.Font = new Font("Segoe UI Semibold Variable", 24F);
         _titleLabel.Location = new Point(0, 0);
-        _subtitleLabel.Font = new Font("Segoe UI", 9.5F);
+        _subtitleLabel.Font = new Font("Segoe UI Variable", 9.5F);
         _subtitleLabel.Location = new Point(2, 42);
         branding.Controls.AddRange([_titleLabel, _subtitleLabel]);
 
-        var buildLabel = TrackLabel($"v{Application.ProductVersion}  •  OffByOneHuman", new Font("Segoe UI Semibold", 8.5F), true);
+        var buildLabel = TrackLabel($"v{Application.ProductVersion}  •  OffByOneHuman", new Font("Segoe UI Semibold Variable", 8.5F), true);
         buildLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         buildLabel.Margin = new Padding(0, 27, 0, 0);
         buildLabel.TextAlign = ContentAlignment.MiddleRight;
@@ -292,9 +292,9 @@ public sealed class MainForm : Form
         var scanHeading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent };
         scanHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         scanHeading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        var scanTitle = TrackLabel("New scan", new Font("Segoe UI Semibold", 12F));
+        var scanTitle = TrackLabel("New scan", new Font("Segoe UI Semibold Variable", 12F));
         scanTitle.Anchor = AnchorStyles.Left;
-        var importHint = TrackLabel("Import .txt/.csv • one target, range, or CIDR per line • # starts a comment", new Font("Segoe UI", 8.2F), true);
+        var importHint = TrackLabel("Import .txt/.csv • one target, range, or CIDR per line • # starts a comment", new Font("Segoe UI Variable", 8.2F), true);
         scanHeading.Controls.Add(scanTitle, 0, 0);
         scanHeading.Controls.Add(importHint, 1, 0);
         layout.Controls.Add(scanHeading, 0, 0);
@@ -303,7 +303,7 @@ public sealed class MainForm : Form
         primary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
         primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (var i = 2; i < 6; i++) primary.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        primary.Controls.Add(TrackLabel("Targets", new Font("Segoe UI Semibold", 9F), true), 0, 0);
+        primary.Controls.Add(TrackLabel("Targets", new Font("Segoe UI Semibold Variable", 9F), true), 0, 0);
         _targets.Dock = DockStyle.Fill;
         _targets.Margin = new Padding(0, 4, 10, 5);
         _inputs.Add(_targets);
@@ -331,7 +331,7 @@ public sealed class MainForm : Form
         secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (var i = 3; i < 7; i++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        secondary.Controls.Add(TrackLabel("Show", new Font("Segoe UI Semibold", 9F), true), 0, 0);
+        secondary.Controls.Add(TrackLabel("Show", new Font("Segoe UI Semibold Variable", 9F), true), 0, 0);
         _filter.Items.AddRange(["All results", "Responding", "Not responding"]);
         _filter.SelectedIndex = 0;
         _filter.Margin = new Padding(0, 5, 10, 5);
@@ -372,10 +372,10 @@ public sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(TrackLabel("Target syntax", new Font("Segoe UI Semibold", 11F)), 0, 0);
+        layout.Controls.Add(TrackLabel("Target syntax", new Font("Segoe UI Semibold Variable", 11F)), 0, 0);
         layout.Controls.Add(TrackLabel(
             "Examples: 192.168.1.20   •   192.168.1.10-192.168.1.25   •   192.168.1.0/24   •   server.example   •   ::1",
-            new Font("Segoe UI", 8.8F), true), 0, 1);
+            new Font("Segoe UI Variable", 8.8F), true), 0, 1);
 
         var chips = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = false, Padding = new Padding(0, 2, 0, 0) };
         AddChip(chips, "?  exactly one decimal digit", "192.168.1.1? → .10–.19");
@@ -392,8 +392,8 @@ public sealed class MainForm : Form
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        var title = TrackLabel("Scan results", new Font("Segoe UI Semibold", 12F));
-        var hint = TrackLabel("Click a column header to sort • Target and IP use natural numeric order", new Font("Segoe UI", 8.5F), true);
+        var title = TrackLabel("Scan results", new Font("Segoe UI Semibold Variable", 12F));
+        var hint = TrackLabel("Click a column header to sort • Target and IP use natural numeric order", new Font("Segoe UI Variable", 8.5F), true);
         layout.Controls.Add(title, 0, 0);
         layout.Controls.Add(hint, 1, 0);
         panel.Controls.Add(layout);
@@ -825,7 +825,7 @@ public sealed class MainForm : Form
             var output = pageCount == 1 ? path : Path.Combine(directory, $"{stem}-{page + 1:000}.png");
             using var bitmap = new Bitmap(width, headerHeight + chunk.Count * rowHeight);
             using var graphics = Graphics.FromImage(bitmap);
-            using var font = new Font("Segoe UI", 9);
+            using var font = new Font("Segoe UI Variable", 9);
             using var bold = new Font(font, FontStyle.Bold);
             using var gridPen = new Pen(_theme.Border);
             using var textBrush = new SolidBrush(_theme.Foreground);
@@ -891,11 +891,40 @@ public sealed class MainForm : Form
             Padding = new Padding(10, 0, 10, 0),
             Margin = new Padding(4, 4, 0, 4),
             Cursor = Cursors.Hand,
-            TextAlign = ContentAlignment.MiddleCenter
+            TextAlign = ContentAlignment.MiddleCenter,
+            IsPrimary = role == "primary"
         };
         button.Size = button.GetPreferredSize(Size.Empty);
         button.Click += click;
         _buttons.Add(button);
+
+        // Apply theme colors via flat appearance for hover states
+        button.FlatAppearance.MouseOverBackColor = role == "primary"
+            ? ControlPaint.Light(_theme.Accent, 0.05F)
+            : Color.FromArgb(30, _theme.Foreground.R, _theme.Foreground.G, _theme.Foreground.B);
+        button.FlatAppearance.MouseDownBackColor = role == "primary"
+            ? ControlPaint.Dark(_theme.Accent, 0.1F)
+            : Color.FromArgb(55, _theme.Foreground.R, _theme.Foreground.G, _theme.Foreground.B);
+
+        if (role == "primary")
+        {
+            button.BackColor = _theme.Accent;
+            button.ForeColor = _theme.AccentForeground;
+            button.FlatAppearance.BorderColor = _theme.Accent;
+        }
+        else if (role == "danger")
+        {
+            button.BackColor = Color.Transparent;
+            button.ForeColor = _theme.Danger;
+            button.FlatAppearance.BorderColor = Color.FromArgb(80, _theme.Danger.R, _theme.Danger.G, _theme.Danger.B);
+        }
+        else
+        {
+            button.BackColor = Color.Transparent;
+            button.ForeColor = _theme.Foreground;
+            button.FlatAppearance.BorderColor = Color.FromArgb(50, _theme.Foreground.R, _theme.Foreground.G, _theme.Foreground.B);
+        }
+
         return button;
     }
 
@@ -906,9 +935,9 @@ public sealed class MainForm : Form
         chip.Size = new Size(280, 42);
         chip.Margin = new Padding(0, 0, 10, 0);
         chip.Padding = new Padding(10, 5, 8, 4);
-        var titleLabel = TrackLabel(title, new Font("Segoe UI Semibold", 8.5F));
+        var titleLabel = TrackLabel(title, new Font("Segoe UI Semibold Variable", 8.5F));
         titleLabel.Location = new Point(10, 4);
-        var detailLabel = TrackLabel(detail, new Font("Segoe UI", 7.8F), true);
+        var detailLabel = TrackLabel(detail, new Font("Segoe UI Variable", 7.8F), true);
         detailLabel.Location = new Point(10, 21);
         chip.Controls.AddRange([titleLabel, detailLabel]);
         parent.Controls.Add(chip);
@@ -955,6 +984,7 @@ public sealed class MainForm : Form
     private void ApplyTheme()
     {
         _theme = ThemeCatalog.Get(_state.ThemeName);
+        Tag = _theme; // Expose theme to child controls (buttons need accent via FindForm().Tag)
         BackColor = _theme.WindowBackground;
         ForeColor = _theme.Foreground;
         _shell.BackColor = _theme.WindowBackground;
@@ -995,21 +1025,21 @@ public sealed class MainForm : Form
         _grid.BackgroundColor = _theme.Surface;
         _grid.GridColor = _theme.Border;
         _grid.EnableHeadersVisualStyles = false;
-        _grid.ColumnHeadersHeight = 34;
+        _grid.ColumnHeadersHeight = 36;
         _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = _theme.SurfaceRaised, ForeColor = _theme.Foreground,
-            Font = new Font("Segoe UI Semibold", 8.5F), SelectionBackColor = _theme.SurfaceRaised,
-            Alignment = DataGridViewContentAlignment.MiddleLeft
+            Font = new Font("Segoe UI Semibold Variable", 8.5F), SelectionBackColor = _theme.SurfaceRaised,
+            SelectionForeColor = _theme.Foreground, Alignment = DataGridViewContentAlignment.MiddleLeft
         };
         _grid.DefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = _theme.Surface, ForeColor = _theme.Foreground,
             SelectionBackColor = _theme.Selection, SelectionForeColor = _theme.Foreground,
-            Padding = new Padding(3, 2, 3, 2), Alignment = DataGridViewContentAlignment.MiddleLeft
+            Padding = new Padding(3, 2, 3, 6), Alignment = DataGridViewContentAlignment.MiddleLeft
         };
         _grid.AlternatingRowsDefaultCellStyle.BackColor = _theme.GridAlternate;
-        _grid.RowTemplate.Height = 29;
+        _grid.RowTemplate.Height = 32; // Windows 11 touch-friendly height
         _grid.RowTemplate.DefaultCellStyle.SelectionBackColor = _theme.Selection;
         _grid.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.DisableResizing;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
@@ -1022,6 +1052,7 @@ public sealed class MainForm : Form
         _grid.BorderStyle = BorderStyle.None;
         _grid.RowHeadersVisible = false;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _grid.EnableHeadersVisualStyles = false;
         _grid.Invalidate();
     }
 }

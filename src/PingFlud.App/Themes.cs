@@ -1,11 +1,20 @@
 namespace PingFlud.App;
 
+using System.Drawing;
+
+/// <summary>
+/// Windows 11 Fluent Design theme palettes.
+/// All control-background colors are fully opaque (alpha=255) to comply with
+/// WinForms Control.BackColor requirements. Semi-transparency is used only
+/// in custom-drawn surfaces (CardPanel gradients, button hover overlays) 
+/// and alpha-channel-based selection colors.
+/// </summary>
 public sealed record ThemePalette(
     string Name,
     Color WindowBackground,
-    Color Surface,
-    Color SurfaceRaised,
-    Color Header,
+    Color Surface,           // Layer 1 — base elevated surface
+    Color SurfaceRaised,     // Layer 2 — cards, elevated surfaces
+    Color Header,            // App header bar
     Color Foreground,
     Color MutedForeground,
     Color Accent,
@@ -19,57 +28,138 @@ public sealed record ThemePalette(
 
 public static class ThemeCatalog
 {
+    /// <summary>
+    /// Helper: converts an ARGB color to fully opaque for use as BackColor.
+    /// </summary>
+    private static Color Solid(int r, int g, int b) => Color.FromArgb(255, r, g, b);
+
     public static IReadOnlyList<ThemePalette> All { get; } =
     [
+        // Midnight — Windows 11 dark teal mica
         new(
             "Midnight",
-            Color.FromArgb(15, 28, 35), Color.FromArgb(22, 42, 52), Color.FromArgb(36, 58, 72),
-            Color.FromArgb(34, 52, 64), Color.FromArgb(245, 250, 252), Color.FromArgb(160, 180, 195),
-            Color.FromArgb(20, 175, 200), Color.White, Color.FromArgb(65, 85, 98),
-            Color.FromArgb(18, 38, 47), Color.FromArgb(52, 88, 100), Color.FromArgb(75, 211, 139),
-            Color.FromArgb(248, 105, 115), true),
+            Solid(15, 28, 35),       // WindowBackground
+            Solid(26, 32, 38),       // Surface
+            Solid(38, 46, 54),       // SurfaceRaised
+            Solid(34, 52, 64),       // Header
+            Solid(247, 248, 250),    // Foreground
+            Solid(173, 181, 192),    // MutedForeground
+            Solid(0, 178, 209),      // Accent
+            Color.White,            // AccentForeground
+            Solid(65, 85, 98),       // Border
+            Solid(32, 36, 42),       // GridAlternate
+            Solid(52, 88, 100),      // Selection (opaque, used as selection backcolor)
+            Solid(75, 211, 139),     // Success
+            Solid(248, 105, 115),    // Danger
+            true),
+
+        // Graphite — Windows 11 dark mode
         new(
             "Graphite",
-            Color.FromArgb(25, 29, 34), Color.FromArgb(42, 46, 52), Color.FromArgb(56, 62, 70),
-            Color.FromArgb(35, 39, 45), Color.FromArgb(245, 247, 250), Color.FromArgb(175, 182, 192),
-            Color.FromArgb(80, 190, 255), Color.FromArgb(15, 35, 55), Color.FromArgb(85, 92, 102),
-            Color.FromArgb(38, 44, 52), Color.FromArgb(65, 85, 100), Color.FromArgb(85, 215, 150),
-            Color.FromArgb(255, 115, 125), true),
+            Solid(25, 29, 34),
+            Solid(28, 32, 36),
+            Solid(42, 47, 52),
+            Solid(42, 47, 52),
+            Solid(247, 248, 250),
+            Solid(173, 181, 192),
+            Solid(55, 159, 226),
+            Color.White,
+            Solid(70, 78, 88),
+            Solid(38, 44, 52),
+            Solid(65, 85, 100),
+            Solid(85, 215, 150),
+            Solid(255, 115, 125),
+            true),
+
+        // Oceanic — Windows 11 dark blue
         new(
             "Oceanic",
-            Color.FromArgb(8, 28, 45), Color.FromArgb(16, 48, 72), Color.FromArgb(28, 65, 98),
-            Color.FromArgb(14, 40, 58), Color.FromArgb(238, 250, 255), Color.FromArgb(150, 185, 210),
-            Color.FromArgb(55, 195, 235), Color.FromArgb(10, 35, 50), Color.FromArgb(52, 90, 120),
-            Color.FromArgb(15, 35, 55), Color.FromArgb(38, 95, 125), Color.FromArgb(85, 220, 165),
-            Color.FromArgb(250, 110, 120), true),
+            Solid(8, 28, 45),
+            Solid(20, 34, 48),
+            Solid(32, 50, 68),
+            Solid(32, 50, 68),
+            Solid(247, 248, 250),
+            Solid(173, 181, 192),
+            Solid(55, 195, 235),
+            Solid(10, 35, 50),
+            Solid(80, 90, 100),
+            Solid(26, 40, 54),
+            Solid(38, 95, 125),
+            Solid(85, 220, 165),
+            Solid(250, 110, 120),
+            true),
+
+        // Forest — Windows 11 green accent
         new(
             "Forest",
-            Color.FromArgb(14, 35, 28), Color.FromArgb(24, 52, 42), Color.FromArgb(36, 70, 58),
-            Color.FromArgb(20, 48, 38), Color.FromArgb(240, 252, 248), Color.FromArgb(155, 190, 175),
-            Color.FromArgb(70, 205, 145), Color.FromArgb(8, 42, 24), Color.FromArgb(58, 95, 78),
-            Color.FromArgb(18, 42, 34), Color.FromArgb(48, 100, 78), Color.FromArgb(90, 220, 155),
-            Color.FromArgb(248, 115, 120), true),
+            Solid(14, 35, 28),
+            Solid(22, 38, 32),
+            Solid(34, 52, 44),
+            Solid(34, 52, 44),
+            Solid(247, 248, 250),
+            Solid(173, 181, 192),
+            Solid(70, 205, 145),
+            Solid(8, 42, 24),
+            Solid(85, 100, 88),
+            Solid(26, 42, 34),
+            Solid(48, 100, 78),
+            Solid(90, 220, 155),
+            Solid(248, 115, 120),
+            true),
+
+        // Amethyst — Windows 11 purple
         new(
             "Amethyst",
-            Color.FromArgb(28, 20, 42), Color.FromArgb(44, 32, 60), Color.FromArgb(62, 48, 85),
-            Color.FromArgb(34, 24, 50), Color.FromArgb(248, 245, 255), Color.FromArgb(185, 170, 205),
-            Color.FromArgb(180, 130, 240), Color.FromArgb(15, 32, 48), Color.FromArgb(88, 68, 110),
-            Color.FromArgb(38, 26, 50), Color.FromArgb(95, 70, 120), Color.FromArgb(90, 220, 160),
-            Color.FromArgb(248, 115, 135), true),
+            Solid(28, 20, 42),
+            Solid(36, 28, 40),
+            Solid(48, 40, 54),
+            Solid(48, 40, 54),
+            Solid(247, 248, 250),
+            Solid(173, 181, 192),
+            Solid(180, 130, 240),
+            Color.White,
+            Solid(90, 70, 110),
+            Solid(38, 26, 50),
+            Solid(100, 80, 130),
+            Solid(90, 220, 160),
+            Solid(248, 115, 135),
+            true),
+
+        // Ember — Windows 11 warm
         new(
             "Ember",
-            Color.FromArgb(40, 25, 18), Color.FromArgb(58, 36, 26), Color.FromArgb(78, 50, 36),
-            Color.FromArgb(50, 32, 22), Color.FromArgb(252, 245, 240), Color.FromArgb(195, 170, 150),
-            Color.FromArgb(245, 155, 85), Color.FromArgb(48, 24, 8), Color.FromArgb(100, 70, 50),
-            Color.FromArgb(50, 30, 20), Color.FromArgb(115, 75, 50), Color.FromArgb(95, 215, 150),
-            Color.FromArgb(248, 105, 110), true),
+            Solid(40, 25, 18),
+            Solid(50, 32, 24),
+            Solid(66, 46, 32),
+            Solid(66, 46, 32),
+            Solid(252, 245, 240),
+            Solid(195, 170, 150),
+            Solid(245, 155, 85),
+            Solid(48, 24, 8),
+            Solid(100, 70, 50),
+            Solid(42, 28, 21),
+            Solid(115, 75, 50),
+            Solid(95, 215, 150),
+            Solid(248, 105, 110),
+            true),
+
+        // Daylight — Windows 11 light mode
         new(
             "Daylight",
-            Color.FromArgb(244, 248, 252), Color.White, Color.FromArgb(250, 253, 255),
-            Color.FromArgb(238, 245, 252), Color.FromArgb(25, 42, 60), Color.FromArgb(95, 112, 130),
-            Color.FromArgb(0, 130, 225), Color.White, Color.FromArgb(210, 225, 240),
-            Color.FromArgb(248, 250, 253), Color.FromArgb(215, 235, 255), Color.FromArgb(35, 150, 90),
-            Color.FromArgb(205, 55, 55), false)
+            Solid(244, 248, 252),
+            Solid(249, 250, 252),
+            Color.White,
+            Solid(238, 245, 252),
+            Solid(32, 32, 32),
+            Solid(97, 97, 102),
+            Solid(0, 120, 212),
+            Color.White,
+            Solid(200, 200, 205),
+            Solid(244, 244, 245),
+            Solid(215, 235, 255),
+            Solid(35, 150, 90),
+            Solid(205, 55, 55),
+            false)
     ];
 
     public static ThemePalette Get(string? name) =>

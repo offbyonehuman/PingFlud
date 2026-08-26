@@ -20,7 +20,7 @@ internal sealed class SettingsDialog : Form
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        Font = new Font("Segoe UI", 9.5F);
+        Font = new Font("Segoe UI Variable", 9.5F);
         BackColor = _theme.WindowBackground;
         ForeColor = _theme.Foreground;
 
@@ -45,7 +45,7 @@ internal sealed class SettingsDialog : Form
         heading.Controls.Add(new Label
         {
             Text = "Scan settings",
-            Font = new Font("Segoe UI Semibold", 18F),
+            Font = new Font("Segoe UI Semibold Variable", 18F),
             ForeColor = _theme.Foreground,
             AutoSize = true,
             Location = new Point(0, 0)
@@ -174,7 +174,7 @@ internal sealed class SettingsDialog : Form
         {
             Text = title,
             ForeColor = _theme.Foreground,
-            Font = new Font("Segoe UI Semibold", 9.5F),
+            Font = new Font("Segoe UI Semibold Variable", 9.5F),
             AutoSize = true,
             Location = new Point(0, 3)
         });
@@ -182,7 +182,7 @@ internal sealed class SettingsDialog : Form
         {
             Text = hint,
             ForeColor = _theme.MutedForeground,
-            Font = new Font("Segoe UI", 8F),
+            Font = new Font("Segoe UI Variable", 8F),
             AutoSize = true,
             Location = new Point(0, 23)
         });
@@ -211,10 +211,15 @@ internal sealed class SettingsDialog : Form
             BackColor = primary ? _theme.Accent : _theme.SurfaceRaised,
             ForeColor = primary ? _theme.AccentForeground : _theme.Foreground,
             Margin = new Padding(8, 0, 0, 0),
-            TextAlign = ContentAlignment.MiddleCenter
+            TextAlign = ContentAlignment.MiddleCenter,
+            IsPrimary = primary
         };
         button.Size = button.GetPreferredSize(Size.Empty);
         button.FlatAppearance.BorderColor = primary ? _theme.Accent : _theme.Border;
+
+        // Set the dialog's Tag so buttons can find accent colors
+        Tag = _theme;
+
         return button;
     }
 
