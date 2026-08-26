@@ -74,11 +74,10 @@ public sealed class MainForm : Form
     private CardPanel _guideCard = null!;
     private CardPanel _resultsCard = null!;
     private StatusStrip _statusStrip = null!;
-    private ContextMenuStrip? _exportMenu;
-    private string? _exportMenuThemeName;
     private Button _startButton = null!;
     private Button _stopButton = null!;
-    private CancellationTokenSource? _cancellation;
+    private CancellationTokenSource? _scanCancellation;
+    private CancellationTokenSource? _exportCancellation;
     private string? _sortProperty = nameof(ScanResult.Address);
     private bool _sortAscending = true;
     private int _completed;
@@ -104,7 +103,12 @@ public sealed class MainForm : Form
         RefreshHistory();
         ApplyFilter();
         ApplyTheme();
-        FormClosing += (_, _) => { _cancellation?.Cancel(); SaveState(); };
+        FormClosing += (_, _) =>
+        {
+            _scanCancellation?.Cancel();
+            _exportCancellation?.Cancel();
+            SaveState();
+        };
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -118,11 +122,11 @@ public sealed class MainForm : Form
     {
         if (disposing)
         {
-            _exportMenu?.Dispose();
             _toolTip.Dispose();
-            _exportMenu = null;
-            _cancellation?.Dispose();
-            _cancellation = null;
+            _scanCancellation?.Dispose();
+            _exportCancellation?.Dispose();
+            _scanCancellation = null;
+            _exportCancellation = null;
         }
         base.Dispose(disposing);
     }
@@ -206,7 +210,7 @@ public sealed class MainForm : Form
         var help = new ToolStripMenuItem("Help");
         help.DropDownItems.Add("Target syntax and legend", null, (_, _) => ShowDocumentation());
         help.DropDownItems.Add("About", null, (_, _) => MessageBox.Show(this,
-            "Ping Flud\nVersion 1.4.1\nDeveloper: OffByOneHuman\n\nAn MIT-licensed independent network reachability tool.\nUse only on networks you own or are authorized to test.",
+            "Ping Flud\nVersion 1.4.3\nDeveloper: OffByOneHuman\n\nAn MIT-licensed independent network reachability tool.\nUse only on networks you own or are authorized to test.",
             "About Ping Flud", MessageBoxButtons.OK, MessageBoxIcon.Information));
 
         menu.Items.AddRange([file, edit, view, help]);
@@ -279,7 +283,7 @@ public sealed class MainForm : Form
         // Application.ProductVersion can include a long source-control suffix.
         // Product metadata belongs in About; the header must remain a readable
         // one-line identity at every supported window size.
-        var buildLabel = TrackLabel("Version 1.4.2  •  OffByOneHuman", new Font("Segoe UI Variable", 8.5F), true);
+        var buildLabel = TrackLabel("Version 1.4.3  •  OffByOneHuman", new Font("Segoe UI Variable", 8.5F), true);
         buildLabel.AutoSize = true;
         buildLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         buildLabel.Margin = new Padding(0, 27, 0, 0);
@@ -323,11 +327,11 @@ public sealed class MainForm : Form
             if (!IsStartKey(e.KeyCode)) return;
             e.Handled = true;
             e.SuppressKeyPress = true;
-            if (_cancellation is null) StartScan(_targets, EventArgs.Empty);
+            if (_scanCancellation is null) StartScan(_targets, EventArgs.Empty);
         };
         primary.Controls.Add(_targets, 1, 0);
         _startButton = CreateButton("▶  Start scan", "primary", StartScan);
-        _stopButton = CreateButton("■  Stop", "danger", (_, _) => _cancellation?.Cancel());
+        _stopButton = CreateButton("■  Stop", "danger", (_, _) => _scanCancellation?.Cancel());
         _stopButton.Enabled = false;
         primary.Controls.Add(_startButton, 2, 0);
         primary.Controls.Add(_stopButton, 3, 0);
@@ -471,15 +475,16 @@ public sealed class MainForm : Form
 
     private async void StartScan(object? sender, EventArgs e)
     {
-        if (_cancellation is not null) return;
-        _cancellation = new CancellationTokenSource();
+        if (_scanCancellation is not null) return;
+        var cancellation = new CancellationTokenSource();
+        _scanCancellation = cancellation;
         SetScanningState(true);
         try
         {
             _status.Text = "Expanding targets…";
             var input = _targets.Text;
             var cap = _state.Settings.ExpansionCap;
-            var expanded = await Task.Run(() => TargetParser.Expand(input, cap, _cancellation.Token), _cancellation.Token);
+            var expanded = await Task.Run(() => TargetParser.Expand(input, cap, cancellation.Token), cancellation.Token);
             if (expanded.Count == 0) return;
 
             Remember(input);
@@ -516,7 +521,7 @@ public sealed class MainForm : Form
                         nextFilterRefresh = DateTime.UtcNow.AddMilliseconds(250);
                     }
                 });
-                await new PingScanner().ScanAsync(expanded, _state.Settings, report, _cancellation.Token);
+                await new PingScanner().ScanAsync(expanded, _state.Settings, report, cancellation.Token);
             }
             finally
             {
@@ -534,8 +539,8 @@ public sealed class MainForm : Form
         }
         finally
         {
-            _cancellation?.Dispose();
-            _cancellation = null;
+            cancellation.Dispose();
+            if (ReferenceEquals(_scanCancellation, cancellation)) _scanCancellation = null;
             SetScanningState(false);
         }
     }
@@ -630,7 +635,7 @@ public sealed class MainForm : Form
 
     private void ClearResults()
     {
-        if (_cancellation is not null)
+        if (_scanCancellation is not null)
         {
             MessageBox.Show(this, "Stop the active scan before clearing results.", "Scan in progress",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -663,42 +668,6 @@ public sealed class MainForm : Form
 
     private void ShowDocumentation() => MessageBox.Show(this, DocumentationText, "Ping Flud target syntax",
         MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-    internal ContextMenuStrip GetOrCreateExportMenu()
-    {
-        if (_exportMenu is not null) return _exportMenu;
-        _exportMenu = new ContextMenuStrip
-        {
-            // The themed professional renderer is not composited correctly over
-            // the custom card surface on this WinForms/DWM combination. Use the
-            // native Windows menu renderer here: it is opaque, correctly layered,
-            // keyboard-accessible, and consistent with Windows 11 shell menus.
-            RenderMode = ToolStripRenderMode.System
-        };
-        _exportMenu.Closed += (_, _) => Invalidate();
-        foreach (var format in new[] { "XML", "HTML", "PDF", "PNG image", "TXT", "XLS-compatible HTML" })
-            _exportMenu.Items.Add(format, null, (_, _) => Export(format));
-        return _exportMenu;
-    }
-
-    private void ShowExportMenu(Control anchor)
-    {
-        var menu = GetOrCreateExportMenu();
-        menu.BackColor = _theme.Surface;
-        menu.ForeColor = _theme.Foreground;
-        _exportMenuThemeName = _theme.Name;
-        foreach (ToolStripItem item in menu.Items)
-        {
-            item.BackColor = _theme.Surface;
-            item.ForeColor = _theme.Foreground;
-        }
-        // Screen coordinates avoid the owner-draw / nested-card coordinate
-        // translation bug that placed menu text over the trigger. Invalidate
-        // the anchor after closing so stale popup glyphs cannot remain painted.
-        menu.Show(anchor.PointToScreen(new Point(0, anchor.Height)), ToolStripDropDownDirection.BelowLeft);
-        menu.Invalidate();
-        menu.Update();
-    }
 
     internal void SelectTheme(string name)
     {
@@ -764,10 +733,10 @@ public sealed class MainForm : Form
         // Run the export on a background thread, writing to a temp file first,
         // then atomically publishing to the user-chosen path.
         var fileName = dialog.FileName;
-        _cancellation?.Cancel(); // Ensure no scan cancellation interferes with export.
-        _cancellation = new CancellationTokenSource();
-        var token = _cancellation.Token;
-        SetScanningState(true);
+        if (_exportCancellation is not null) return;
+        var cancellation = new CancellationTokenSource();
+        _exportCancellation = cancellation;
+        var token = cancellation.Token;
         try
         {
             _status.Text = "Exporting…";
@@ -791,9 +760,8 @@ public sealed class MainForm : Form
         }
         finally
         {
-            _cancellation?.Dispose();
-            _cancellation = null;
-            SetScanningState(false);
+            cancellation.Dispose();
+            if (ReferenceEquals(_exportCancellation, cancellation)) _exportCancellation = null;
         }
     }
 
@@ -926,31 +894,20 @@ public sealed class MainForm : Form
         button.Click += click;
         _buttons.Add(button);
 
-        // Apply theme colors via flat appearance for hover states
-        button.FlatAppearance.MouseOverBackColor = role == "primary"
-            ? ControlPaint.Light(_theme.Accent, 0.05F)
-            : Color.FromArgb(30, _theme.Foreground.R, _theme.Foreground.G, _theme.Foreground.B);
-        button.FlatAppearance.MouseDownBackColor = role == "primary"
-            ? ControlPaint.Dark(_theme.Accent, 0.1F)
-            : Color.FromArgb(55, _theme.Foreground.R, _theme.Foreground.G, _theme.Foreground.B);
-
         if (role == "primary")
         {
             button.BackColor = _theme.Accent;
             button.ForeColor = _theme.AccentForeground;
-            button.FlatAppearance.BorderColor = _theme.Accent;
         }
         else if (role == "danger")
         {
-            button.BackColor = Color.Transparent;
+            button.BackColor = _theme.SurfaceRaised;
             button.ForeColor = _theme.Danger;
-            button.FlatAppearance.BorderColor = Color.FromArgb(80, _theme.Danger.R, _theme.Danger.G, _theme.Danger.B);
         }
         else
         {
-            button.BackColor = Color.Transparent;
+            button.BackColor = _theme.SurfaceRaised;
             button.ForeColor = _theme.Foreground;
-            button.FlatAppearance.BorderColor = Color.FromArgb(50, _theme.Foreground.R, _theme.Foreground.G, _theme.Foreground.B);
         }
 
         return button;
@@ -979,15 +936,11 @@ public sealed class MainForm : Form
             {
                 button.BackColor = _theme.SurfaceRaised;
                 button.ForeColor = _theme.MutedForeground;
-                button.FlatAppearance.BorderColor = _theme.Border;
-                button.FlatAppearance.MouseOverBackColor = _theme.SurfaceRaised;
                 continue;
             }
             var role = button.Tag?.ToString();
             button.BackColor = role switch { "primary" => _theme.Accent, "danger" => _theme.SurfaceRaised, _ => _theme.SurfaceRaised };
             button.ForeColor = role switch { "primary" => _theme.AccentForeground, "danger" => _theme.Danger, _ => _theme.Foreground };
-            button.FlatAppearance.BorderColor = role switch { "primary" => _theme.Accent, "danger" => _theme.Danger, _ => _theme.Border };
-            button.FlatAppearance.MouseOverBackColor = role == "primary" ? ControlPaint.Light(_theme.Accent, .1F) : _theme.Selection;
         }
     }
 
@@ -1030,7 +983,6 @@ public sealed class MainForm : Form
         {
             card.BackColor = _theme.Surface;
             card.GradientColor = _theme.IsDark ? ControlPaint.Light(_theme.Surface, 0.08F) : _theme.SurfaceRaised;
-            card.ShadowColor = Color.FromArgb(_theme.IsDark ? 70 : 30, 0, 0, 0);
             card.BorderColor = _theme.Border;
             card.Invalidate();
         }

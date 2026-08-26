@@ -31,25 +31,10 @@ public sealed class SettingsDialogTests
     }
 
     [Fact]
-    public void ExportMenuIsReusableAndNotDisposedWhenClosed()
-    {
-        using var form = CreateMainForm();
-        var first = form.GetOrCreateExportMenu();
-        first.Close();
-        var second = form.GetOrCreateExportMenu();
-
-        Assert.Same(first, second);
-        Assert.False(second.IsDisposed);
-        form.Dispose();
-        Assert.True(second.IsDisposed);
-    }
-
-    [Fact]
-    public void ProvidesThreePersistentThemes()
+    public void ProvidesOnlySupportedThemes()
     {
         Assert.Equal("Midnight", new AppState().ThemeName);
-        Assert.True(ThemeCatalog.All.Count >= 7);
-        Assert.Equal(ThemeCatalog.All.Count, ThemeCatalog.All.Select(theme => theme.Name).Distinct().Count());
+        Assert.Equal(["Midnight", "Nebula", "Daylight"], ThemeCatalog.All.Select(theme => theme.Name));
         Assert.All(ThemeCatalog.All, theme => Assert.NotEqual(theme.WindowBackground, theme.Foreground));
     }
 

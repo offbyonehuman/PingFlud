@@ -39,7 +39,6 @@ internal sealed class RoundedButton : Button
     public RoundedButton()
     {
         FlatStyle = FlatStyle.Flat;
-        FlatAppearance.BorderSize = 0;
         TextAlign = ContentAlignment.MiddleCenter;
         UseVisualStyleBackColor = false;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
@@ -198,12 +197,8 @@ internal static class FluentHelpers
 
 internal sealed class RoundedNumericUpDown : NumericUpDown
 {
-    // NumericUpDown is a native composite control. Owner-painting it leaves its
-    // hosted edit/spin-button windows in their default (white) state on Windows.
-    // Keep native painting so it respects Windows 11 metrics and theme the child
-    // windows explicitly whenever the palette changes.
-    public int CornerRadius { get; set; } = 6;
-
+    // NumericUpDown is a native composite control; keep native painting so its
+    // hosted edit and spin-button windows receive the active palette correctly.
     public RoundedNumericUpDown()
     {
         BorderStyle = BorderStyle.FixedSingle;
@@ -245,7 +240,6 @@ internal sealed class CardPanel : Panel
 {
     public Color BorderColor { get; set; } = Color.Gray;
     public Color GradientColor { get; set; } = Color.Gray;
-    public Color ShadowColor { get; set; } = Color.FromArgb(70, 0, 0, 0);
     public int CornerRadius { get; set; } = 12;
 
     public CardPanel()

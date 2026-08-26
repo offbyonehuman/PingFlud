@@ -225,8 +225,6 @@ internal sealed class SettingsDialog : Form
             IsPrimary = primary
         };
         button.Size = button.GetPreferredSize(Size.Empty);
-        button.FlatAppearance.BorderColor = primary ? _theme.Accent : _theme.Border;
-
         // Set the dialog's Tag so buttons can find accent colors
         Tag = _theme;
 
