@@ -33,8 +33,12 @@ public sealed class SettingsDialogTests
     [Fact]
     public void ProvidesOnlySupportedThemes()
     {
-        Assert.Equal("Midnight", new AppState().ThemeName);
-        Assert.Equal(["Midnight", "Nebula", "Daylight"], ThemeCatalog.All.Select(theme => theme.Name));
+        Assert.Equal("Graphite", new AppState().ThemeName);
+        Assert.Equal(["Graphite", "Midnight", "Nebula", "Daylight"], ThemeCatalog.All.Select(theme => theme.Name));
+        var graphite = ThemeCatalog.Get("Graphite");
+        Assert.True(graphite.IsDark);
+        Assert.True(graphite.WindowBackground.R < 24 && graphite.WindowBackground.G < 24 && graphite.WindowBackground.B < 24);
+        Assert.True(graphite.Surface.R > graphite.WindowBackground.R);
         Assert.All(ThemeCatalog.All, theme => Assert.NotEqual(theme.WindowBackground, theme.Foreground));
     }
 
@@ -52,20 +56,20 @@ public sealed class SettingsDialogTests
     }
 
     [Fact]
-    public void MainWindowShowsUsageLegendAndCsvReportButton()
+    public void MainWindowUsesTaskLedEmptyStateAndResultsToolbar()
     {
         using var form = CreateMainForm();
         var controls = Descendants(form).ToList();
 
         var labels = controls.OfType<Label>().ToList();
-        Assert.Contains(labels, label => label.Text.Contains("Examples:") && label.Text.Contains("/24"));
-        Assert.Contains(labels, label => label.Text.Contains("?") && label.Text.Contains("exactly one decimal digit"));
-        Assert.Contains(labels, label => label.Text.Contains("*") && label.Text.Contains("any valid octet digits"));
-        Assert.Contains(labels, label => label.Text.Contains("Range / CIDR"));
+        Assert.Contains(labels, label => label.Text == "No scan results yet");
+        Assert.Contains(labels, label => label.Text.Contains("host, IP address, range, or CIDR"));
+        Assert.DoesNotContain(labels, label => label.Text.Contains("Examples:"));
+        Assert.DoesNotContain(labels, label => label.Text.Contains("exactly one decimal digit"));
         Assert.Contains(labels, label => label.Text.Contains("WORKSPACE"));
         Assert.Contains(labels, label => label.Text.Contains("PING FLUD"));
-        Assert.Contains(labels, label => label.Text.Contains("Import .txt/.csv") && label.Text.Contains("one target"));
         var buttons = controls.OfType<Button>().ToList();
+        Assert.Contains(buttons, button => button.Text.Contains("Syntax help"));
         var cards = controls.OfType<CardPanel>().ToList();
         Assert.NotEmpty(cards);
         Assert.All(cards, card => { Assert.True(card.CornerRadius >= 10); Assert.NotEqual(card.BackColor, card.GradientColor); });
@@ -73,9 +77,11 @@ public sealed class SettingsDialogTests
         Assert.All(buttons, button => Assert.True(((RoundedButton)button).FocusCuesVisible, "RoundedButton must show focus cues for accessibility"));
         Assert.Contains(buttons, button => button.Text.Contains("Scan workspace"));
         Assert.Contains(buttons, button => button.Text.Contains("Import list"));
+        Assert.Contains(buttons, button => button.Text.Contains("Scan settings"));
         Assert.DoesNotContain(buttons, button => button.Text.Trim().EndsWith("Results"));
         Assert.DoesNotContain(buttons, button => button.Text.Trim().EndsWith("Reports"));
         Assert.Contains(buttons, button => button.Text.Contains("Export CSV"));
+        Assert.All(buttons.Where(button => button.Text is "Copy" or "Clear" or "Export CSV"), button => Assert.False(button.Enabled));
         var extraFormats = Assert.Single(controls.OfType<ComboBox>(), control => control.AccessibleName == "More export formats");
         Assert.Equal("More formats…", extraFormats.Text);
         Assert.Contains("PDF", extraFormats.Items.Cast<string>());
@@ -84,7 +90,7 @@ public sealed class SettingsDialogTests
         Assert.Equal(SortOrder.Ascending, grid.Columns["Address"].HeaderCell.SortGlyphDirection);
         var stop = Assert.Single(buttons, button => button.Text.Contains("Stop"));
         Assert.False(stop.Enabled);
-        Assert.Equal(ThemeCatalog.Get("Midnight").SurfaceRaised, stop.BackColor);
+        Assert.Equal(ThemeCatalog.Get("Graphite").SurfaceRaised, stop.BackColor);
     }
 
     private static MainForm CreateMainForm() => new(

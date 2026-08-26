@@ -14,7 +14,7 @@ public sealed class AppState
     public List<string> History { get; set; } = [];
     public string Title { get; set; } = "Ping Flud";
     public string Subtitle { get; set; } = "Fast, transparent network reachability checks";
-    public string ThemeName { get; set; } = "Midnight";
+    public string ThemeName { get; set; } = "Graphite";
 }
 
 public sealed class MainForm : Form
@@ -34,6 +34,7 @@ public sealed class MainForm : Form
     private readonly BindingList<ScanResult> _allResults = [];
     private readonly BindingSource _source = new();
     private readonly List<Button> _buttons = [];
+    private readonly List<Control> _resultActions = [];
     private readonly List<Label> _labels = [];
     private readonly List<CardPanel> _cards = [];
     private readonly List<Control> _inputs = [];
@@ -71,8 +72,11 @@ public sealed class MainForm : Form
     private Panel _header = null!;
     private Panel _resultsToolbar = null!;
     private CardPanel _scanCard = null!;
-    private CardPanel _guideCard = null!;
     private CardPanel _resultsCard = null!;
+    private Panel _emptyState = null!;
+    private Label _emptyStateTitle = null!;
+    private Label _emptyStateDetail = null!;
+    private Label _scanSummaryLabel = null!;
     private StatusStrip _statusStrip = null!;
     private Button _startButton = null!;
     private Button _stopButton = null!;
@@ -138,34 +142,33 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 6,
+            RowCount = 5,
             Padding = new Padding(16, 0, 16, 0)
         };
         _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
-        _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 164));
-        _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
+        _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 156));
         _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         _root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
 
         _header = BuildHeader();
         _scanCard = BuildScanCard();
-        _guideCard = BuildGuideCard();
         _resultsToolbar = BuildResultsToolbar();
         ConfigureGrid();
         _resultsCard = CreateCard();
         _resultsCard.Margin = new Padding(0, 0, 0, 8);
         _resultsCard.Padding = new Padding(10);
         _resultsCard.Controls.Add(_grid);
+        _emptyState = BuildEmptyState();
+        _resultsCard.Controls.Add(_emptyState);
         _statusStrip = new StatusStrip { Dock = DockStyle.Fill, SizingGrip = false };
         _statusStrip.Items.AddRange([_status, new ToolStripStatusLabel { Spring = true }, _summary, _progress, _exportProgress]);
 
         _root.Controls.Add(_header, 0, 0);
         _root.Controls.Add(_scanCard, 0, 1);
-        _root.Controls.Add(_guideCard, 0, 2);
-        _root.Controls.Add(_resultsToolbar, 0, 3);
-        _root.Controls.Add(_resultsCard, 0, 4);
-        _root.Controls.Add(_statusStrip, 0, 5);
+        _root.Controls.Add(_resultsToolbar, 0, 2);
+        _root.Controls.Add(_resultsCard, 0, 3);
+        _root.Controls.Add(_statusStrip, 0, 4);
 
         _shell = new TableLayoutPanel
         {
@@ -210,7 +213,7 @@ public sealed class MainForm : Form
         var help = new ToolStripMenuItem("Help");
         help.DropDownItems.Add("Target syntax and legend", null, (_, _) => ShowDocumentation());
         help.DropDownItems.Add("About", null, (_, _) => MessageBox.Show(this,
-            "Ping Flud\nVersion 1.4.3\nDeveloper: OffByOneHuman\n\nAn MIT-licensed independent network reachability tool.\nUse only on networks you own or are authorized to test.",
+            "Ping Flud\nVersion 1.4.5\nDeveloper: OffByOneHuman\n\nAn MIT-licensed independent network reachability tool.\nUse only on networks you own or are authorized to test.",
             "About Ping Flud", MessageBoxButtons.OK, MessageBoxIcon.Information));
 
         menu.Items.AddRange([file, edit, view, help]);
@@ -239,7 +242,7 @@ public sealed class MainForm : Form
         flow.Controls.Add(CreateSidebarButton("?   Documentation", "nav", (_, _) => ShowDocumentation()));
         AddSidebarSection(flow, "SUPPORT");
         flow.Controls.Add(CreateSidebarButton("ⓘ   About", "nav", (_, _) => MessageBox.Show(this,
-            "Ping Flud 1.4.1\nDeveloper: OffByOneHuman\n\nOpen-source network reachability scanner.",
+            "Ping Flud 1.4.5\nDeveloper: OffByOneHuman\n\nOpen-source network reachability scanner.",
             "About Ping Flud", MessageBoxButtons.OK, MessageBoxIcon.Information)));
 
         var authorization = TrackLabel("AUTHORIZED NETWORKS ONLY", new Font("Segoe UI Semibold Variable", 7.5F), true);
@@ -283,7 +286,7 @@ public sealed class MainForm : Form
         // Application.ProductVersion can include a long source-control suffix.
         // Product metadata belongs in About; the header must remain a readable
         // one-line identity at every supported window size.
-        var buildLabel = TrackLabel("Version 1.4.3  •  OffByOneHuman", new Font("Segoe UI Variable", 8.5F), true);
+        var buildLabel = TrackLabel("Version 1.4.5  •  OffByOneHuman", new Font("Segoe UI Variable", 8.5F), true);
         buildLabel.AutoSize = true;
         buildLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         buildLabel.Margin = new Padding(0, 27, 0, 0);
@@ -309,18 +312,20 @@ public sealed class MainForm : Form
         scanHeading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         var scanTitle = TrackLabel("New scan", new Font("Segoe UI Semibold Variable", 12F));
         scanTitle.Anchor = AnchorStyles.Left;
-        var importHint = TrackLabel("Import .txt/.csv • one target, range, or CIDR per line • # starts a comment", new Font("Segoe UI Variable", 8.2F), true);
+        var importHint = TrackLabel("Enter a host, IP address, range, or CIDR block", new Font("Segoe UI Variable", 8.5F), true);
         scanHeading.Controls.Add(scanTitle, 0, 0);
         scanHeading.Controls.Add(importHint, 1, 0);
         layout.Controls.Add(scanHeading, 0, 0);
 
-        var primary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1 };
+        var primary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1 };
         primary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
         primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 2; i < 6; i++) primary.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        primary.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        primary.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         primary.Controls.Add(TrackLabel("Targets", new Font("Segoe UI Semibold Variable", 9F), true), 0, 0);
         _targets.Dock = DockStyle.Fill;
         _targets.Margin = new Padding(0, 4, 10, 5);
+        _targets.AccessibleDescription = "Enter a host, IP address, inclusive range, CIDR block, or IPv4 wildcard.";
         _inputs.Add(_targets);
         _targets.KeyDown += (_, e) =>
         {
@@ -335,32 +340,61 @@ public sealed class MainForm : Form
         _stopButton.Enabled = false;
         primary.Controls.Add(_startButton, 2, 0);
         primary.Controls.Add(_stopButton, 3, 0);
+
+        var secondary = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent
+        };
         var importButton = CreateButton("Import list…", "secondary", (_, _) => ImportTargets());
         _toolTip.SetToolTip(importButton,
             "Import a .txt or .csv file. Put one address, host, range, CIDR, or wildcard specification on each line. Lines beginning with # are ignored.");
-        primary.Controls.Add(importButton, 4, 0);
-        primary.Controls.Add(CreateButton("Settings", "secondary", (_, _) => ShowSettings()), 5, 0);
+        secondary.Controls.Add(importButton);
+        secondary.Controls.Add(CreateButton("Scan settings", "secondary", (_, _) => ShowSettings()));
+        secondary.Controls.Add(CreateButton("Syntax help", "secondary", (_, _) => ShowDocumentation()));
 
-        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, RowCount = 1 };
-        secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
-        secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-        secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 3; i < 7; i++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        secondary.Controls.Add(TrackLabel("Show", new Font("Segoe UI Semibold Variable", 9F), true), 0, 0);
+        layout.Controls.Add(primary, 0, 1);
+        layout.Controls.Add(secondary, 0, 2);
+        card.Controls.Add(layout);
+        return card;
+    }
+
+    private Panel BuildResultsToolbar()
+    {
+        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(2, 10, 2, 6) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1, BackColor = Color.Transparent };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 146));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
+        for (var i = 4; i < 8; i++) layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var title = TrackLabel("Scan results", new Font("Segoe UI Semibold Variable", 12F));
+        title.Margin = new Padding(0, 7, 16, 0);
+        _scanSummaryLabel = TrackLabel(string.Empty, new Font("Segoe UI Variable", 8.5F), true);
+        _scanSummaryLabel.Margin = new Padding(0, 9, 12, 0);
+        layout.Controls.Add(title, 0, 0);
+        layout.Controls.Add(_scanSummaryLabel, 1, 0);
+
         _filter.Items.AddRange(["All results", "Responding", "Not responding"]);
         _filter.SelectedIndex = 0;
         _filter.Margin = new Padding(0, 5, 10, 5);
         _filter.SelectedIndexChanged += (_, _) => ApplyFilter();
         _inputs.Add(_filter);
-        secondary.Controls.Add(_filter, 1, 0);
+        layout.Controls.Add(_filter, 2, 0);
         _search.Dock = DockStyle.Fill;
         _search.Margin = new Padding(0, 5, 10, 5);
         _search.TextChanged += (_, _) => ApplyFilter();
         _inputs.Add(_search);
-        secondary.Controls.Add(_search, 2, 0);
-        secondary.Controls.Add(CreateButton("Copy", "secondary", (_, _) => CopySelected()), 3, 0);
-        secondary.Controls.Add(CreateButton("Clear", "secondary", (_, _) => ClearResults()), 4, 0);
-        secondary.Controls.Add(CreateButton("Export CSV", "primary", (_, _) => Export("CSV")), 5, 0);
+        layout.Controls.Add(_search, 3, 0);
+        var copyButton = CreateButton("Copy", "secondary", (_, _) => CopySelected());
+        var clearButton = CreateButton("Clear", "secondary", (_, _) => ClearResults());
+        var exportButton = CreateButton("Export CSV", "primary", (_, _) => Export("CSV"));
+        _resultActions.AddRange([copyButton, clearButton, exportButton]);
+        layout.Controls.Add(copyButton, 4, 0);
+        layout.Controls.Add(clearButton, 5, 0);
+        layout.Controls.Add(exportButton, 6, 0);
         var moreFormats = new ComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
@@ -378,47 +412,28 @@ public sealed class MainForm : Form
             Export(format);
         };
         _inputs.Add(moreFormats);
-        secondary.Controls.Add(moreFormats, 6, 0);
-
-        layout.Controls.Add(primary, 0, 1);
-        layout.Controls.Add(secondary, 0, 2);
-        card.Controls.Add(layout);
-        return card;
+        _resultActions.Add(moreFormats);
+        layout.Controls.Add(moreFormats, 7, 0);
+        panel.Controls.Add(layout);
+        return panel;
     }
 
-    private CardPanel BuildGuideCard()
+    private Panel BuildEmptyState()
     {
-        var card = CreateCard();
-        card.Margin = new Padding(0, 0, 0, 12);
-        card.Padding = new Padding(18, 10, 18, 10);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(TrackLabel("Target syntax", new Font("Segoe UI Semibold Variable", 11F)), 0, 0);
-        layout.Controls.Add(TrackLabel(
-            "Examples: 192.168.1.20   •   192.168.1.10-192.168.1.25   •   192.168.1.0/24   •   server.example   •   ::1",
-            new Font("Segoe UI Variable", 8.8F), true), 0, 1);
-
-        var chips = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = false, Padding = new Padding(0, 2, 0, 0) };
-        AddChip(chips, "?  exactly one decimal digit", "192.168.1.1? → .10–.19");
-        AddChip(chips, "*  any valid octet digits", "192.168.1.* → .0–.255");
-        AddChip(chips, "Range / CIDR address blocks", "Endpoints included • /24 = 256 • cap applies");
-        layout.Controls.Add(chips, 0, 2);
-        card.Controls.Add(layout);
-        return card;
-    }
-
-    private Panel BuildResultsToolbar()
-    {
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(2, 10, 2, 6) };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent };
+        var panel = new Panel { Dock = DockStyle.Fill, AccessibleName = "Empty scan results" };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        var title = TrackLabel("Scan results", new Font("Segoe UI Semibold Variable", 12F));
-        var hint = TrackLabel("Click a column header to sort • Target and IP use natural numeric order", new Font("Segoe UI Variable", 8.5F), true);
-        layout.Controls.Add(title, 0, 0);
-        layout.Controls.Add(hint, 1, 0);
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+        _emptyStateTitle = TrackLabel("No scan results yet", new Font("Segoe UI Semibold Variable", 14F));
+        _emptyStateTitle.Anchor = AnchorStyles.None;
+        _emptyStateDetail = TrackLabel("Enter a host, IP address, range, or CIDR block to begin.", new Font("Segoe UI Variable", 9.5F), true);
+        _emptyStateDetail.Anchor = AnchorStyles.None;
+        _emptyStateDetail.Margin = new Padding(0, 8, 0, 0);
+        layout.Controls.Add(_emptyStateTitle, 0, 1);
+        layout.Controls.Add(_emptyStateDetail, 0, 2);
         panel.Controls.Add(layout);
         return panel;
     }
@@ -489,6 +504,8 @@ public sealed class MainForm : Form
 
             Remember(input);
             _allResults.Clear();
+            _scanSummaryLabel.Text = string.Empty;
+            ApplyFilter();
             _total = expanded.Count;
             _completed = 0;
             _progress.Value = 0;
@@ -530,6 +547,7 @@ public sealed class MainForm : Form
             }
             ApplyFilter();
             _status.Text = "Scan complete";
+            UpdateResultsPresentation(completed: true);
         }
         catch (OperationCanceledException) { _status.Text = "Scan stopped"; }
         catch (Exception ex)
@@ -586,6 +604,30 @@ public sealed class MainForm : Form
         _summary.Text = _search.Text.Length > 0
             ? $"{matchCount:N0} of {totalCount:N0} shown"
             : $"{totalCount:N0} targets";
+        UpdateResultsPresentation();
+    }
+
+    private void UpdateResultsPresentation(bool completed = false)
+    {
+        var visibleCount = _source.List.Cast<object>().OfType<ScanResult>().Count();
+        var hasResults = _allResults.Count > 0;
+        _emptyState.Visible = visibleCount == 0;
+        _grid.Visible = visibleCount > 0;
+        _emptyStateTitle.Text = hasResults ? "No matching results" : "No scan results yet";
+        _emptyStateDetail.Text = hasResults
+            ? "Adjust the filter or search text to show matching scan results."
+            : "Enter a host, IP address, range, or CIDR block to begin.";
+        foreach (var action in _resultActions) action.Enabled = hasResults;
+        ApplyButtonStyles();
+
+        if (!completed) return;
+        var responding = _allResults.Where(result => result.Responding).ToList();
+        var unavailable = _allResults.Count - responding.Count;
+        var latencySamples = responding.Where(result => result.RoundtripMs.HasValue)
+            .Select(result => result.RoundtripMs!.Value).Order().ToList();
+        long? median = latencySamples.Count == 0 ? null : latencySamples[latencySamples.Count / 2];
+        _scanSummaryLabel.Text = $"Completed · {_allResults.Count:N0} targets · {responding.Count:N0} responding · {unavailable:N0} unavailable" +
+            (median.HasValue ? $" · median {median.Value:N0} ms" : string.Empty);
     }
 
     private IEnumerable<ScanResult> Sort<TKey>(IEnumerable<ScanResult> rows, Func<ScanResult, TKey> key,
@@ -646,6 +688,8 @@ public sealed class MainForm : Form
         _summary.Text = "0 targets";
         _progress.Value = 0;
         _status.Text = "Ready";
+        _scanSummaryLabel.Text = string.Empty;
+        UpdateResultsPresentation();
     }
 
     private void CopySelected()
@@ -913,20 +957,6 @@ public sealed class MainForm : Form
         return button;
     }
 
-    private void AddChip(FlowLayoutPanel parent, string title, string detail)
-    {
-        var chip = CreateCard();
-        chip.Dock = DockStyle.None;
-        chip.Size = new Size(280, 42);
-        chip.Margin = new Padding(0, 0, 10, 0);
-        chip.Padding = new Padding(10, 5, 8, 4);
-        var titleLabel = TrackLabel(title, new Font("Segoe UI Semibold Variable", 8.5F));
-        titleLabel.Location = new Point(10, 4);
-        var detailLabel = TrackLabel(detail, new Font("Segoe UI Variable", 7.8F), true);
-        detailLabel.Location = new Point(10, 21);
-        chip.Controls.AddRange([titleLabel, detailLabel]);
-        parent.Controls.Add(chip);
-    }
 
     private void ApplyButtonStyles()
     {
@@ -978,6 +1008,7 @@ public sealed class MainForm : Form
         _sidebar.BackColor = _theme.SurfaceRaised;
         _header.BackColor = _theme.Header;
         _resultsToolbar.BackColor = _theme.WindowBackground;
+        _emptyState.BackColor = _theme.Surface;
 
         foreach (var card in _cards)
         {

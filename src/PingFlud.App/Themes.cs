@@ -35,6 +35,24 @@ public static class ThemeCatalog
 
     public static IReadOnlyList<ThemePalette> All { get; } =
     [
+        // Graphite — neutral Windows 11 black-and-grey default
+        new(
+            "Graphite",
+            Solid(18, 18, 18),       // WindowBackground  #121212
+            Solid(30, 30, 30),       // Surface           #1E1E1E
+            Solid(42, 42, 42),       // SurfaceRaised     #2A2A2A
+            Solid(23, 23, 23),       // Header            #171717
+            Solid(245, 245, 245),    // Foreground        #F5F5F5
+            Solid(180, 180, 180),    // MutedForeground   #B4B4B4
+            Solid(200, 200, 200),    // Accent            #C8C8C8
+            Solid(18, 18, 18),       // AccentForeground
+            Solid(70, 70, 70),       // Border            #464646
+            Solid(24, 24, 24),       // GridAlternate     #181818
+            Solid(68, 68, 68),       // Selection         #444444
+            Solid(86, 205, 137),     // Success
+            Solid(255, 145, 155),    // Danger
+            true),
+
         // Midnight — dark navy-slate dashboard (reference-matched)
         new(
             "Midnight",
