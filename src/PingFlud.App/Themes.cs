@@ -35,22 +35,40 @@ public static class ThemeCatalog
 
     public static IReadOnlyList<ThemePalette> All { get; } =
     [
-        // Midnight — Windows 11 dark teal mica
+        // Midnight — dark navy-slate dashboard (reference-matched)
         new(
             "Midnight",
-            Solid(15, 28, 35),       // WindowBackground
-            Solid(26, 32, 38),       // Surface
-            Solid(38, 46, 54),       // SurfaceRaised
-            Solid(34, 52, 64),       // Header
-            Solid(247, 248, 250),    // Foreground
-            Solid(173, 181, 192),    // MutedForeground
-            Solid(0, 178, 209),      // Accent
-            Color.White,            // AccentForeground
-            Solid(65, 85, 98),       // Border
-            Solid(32, 36, 42),       // GridAlternate
-            Solid(52, 88, 100),      // Selection (opaque, used as selection backcolor)
+            Solid(26, 32, 48),       // WindowBackground  #1A2030
+            Solid(35, 39, 51),       // Surface           #232733
+            Solid(46, 49, 55),       // SurfaceRaised     #2E3137
+            Solid(30, 36, 56),       // Header            #1E2438
+            Solid(240, 240, 240),    // Foreground        #F0F0F0
+            Solid(192, 192, 192),    // MutedForeground   #C0C0C0
+            Solid(64, 128, 192),     // Accent            #4080C0 azure blue
+            Color.White,             // AccentForeground
+            Solid(72, 78, 96),       // Border
+            Solid(31, 34, 44),       // GridAlternate     #1F222C
+            Solid(64, 110, 180),     // Selection         #406EB4
             Solid(75, 211, 139),     // Success
             Solid(248, 105, 115),    // Danger
+            true),
+
+        // Nebula — violet-shifted variant of the reference
+        new(
+            "Nebula",
+            Solid(28, 27, 43),
+            Solid(38, 37, 56),
+            Solid(50, 48, 68),
+            Solid(33, 32, 52),
+            Solid(242, 240, 250),
+            Solid(190, 186, 205),
+            Solid(128, 96, 192),     // Accent #8060C0 violet
+            Color.White,
+            Solid(80, 76, 104),
+            Solid(33, 32, 45),
+            Solid(120, 100, 190),
+            Solid(90, 220, 160),
+            Solid(248, 105, 135),
             true),
 
         // Graphite — Windows 11 dark mode
