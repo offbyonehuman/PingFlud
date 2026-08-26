@@ -105,6 +105,48 @@ internal sealed class RoundedButton : Button
     }
 }
 
+internal sealed class RoundedNumericUpDown : NumericUpDown
+{
+    private bool _hovered;
+    public int CornerRadius { get; set; } = 6;
+
+    public RoundedNumericUpDown()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+    }
+
+    protected override bool ShowFocusCues => true;
+
+    public bool FocusCuesVisible => ShowFocusCues;
+
+    protected override void OnMouseEnter(EventArgs e) { _hovered = true; base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hovered = false; base.OnMouseLeave(e); }
+    protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
+        using var path = UiGeometry.RoundedRectangle(bounds, CornerRadius);
+
+        // Draw rounded border with hover feedback.
+        var borderColor = _hovered && Enabled ? ControlPaint.Light(ForeColor, 0.1F) : ForeColor;
+        using var pen = new Pen(borderColor);
+        e.Graphics.DrawPath(pen, path);
+
+        base.OnPaint(e);
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        using var path = UiGeometry.RoundedRectangle(
+            new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1)), CornerRadius);
+        Region = new Region(path);
+    }
+}
+
 internal sealed class CardPanel : Panel
 {
     public Color BorderColor { get; set; } = Color.Gray;

@@ -151,4 +151,12 @@ public sealed class SettingsDialogTests
         Assert.Equal(maximum, control.Maximum);
         Assert.Equal(value, control.Value);
     }
+
+    [Fact]
+    public void RoundedNumericUpDownShowsFocusCues()
+    {
+        using var numeric = SettingsDialog.CreateNumeric(1000, 1, 120000);
+        var rounded = Assert.IsType<RoundedNumericUpDown>(numeric);
+        Assert.True(rounded.FocusCuesVisible, "NumericUpDown must show focus cues for accessibility");
+    }
 }

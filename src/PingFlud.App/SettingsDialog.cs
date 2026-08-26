@@ -218,9 +218,9 @@ internal sealed class SettingsDialog : Form
         return button;
     }
 
-    internal static NumericUpDown CreateNumeric(decimal value, decimal min, decimal max)
+    internal static RoundedNumericUpDown CreateNumeric(decimal value, decimal min, decimal max)
     {
-        var control = new NumericUpDown
+        var control = new RoundedNumericUpDown
         {
             Minimum = min,
             Maximum = max,

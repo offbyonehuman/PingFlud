@@ -58,6 +58,7 @@ public sealed class MainForm : Form
     private readonly ToolStripStatusLabel _status = new("Ready");
     private readonly ToolStripStatusLabel _summary = new("0 targets");
     private readonly ToolStripProgressBar _progress = new() { Minimum = 0, Maximum = 100, Width = 170 };
+    private readonly ToolStripStatusLabel _exportProgress = new(" ");
     private readonly Label _titleLabel = new() { AutoSize = true };
     private readonly Label _subtitleLabel = new() { AutoSize = true };
 
@@ -146,7 +147,7 @@ public sealed class MainForm : Form
         _resultsCard.Padding = new Padding(10);
         _resultsCard.Controls.Add(_grid);
         _statusStrip = new StatusStrip { Dock = DockStyle.Fill, SizingGrip = false };
-        _statusStrip.Items.AddRange([_status, new ToolStripStatusLabel { Spring = true }, _summary, _progress]);
+        _statusStrip.Items.AddRange([_status, new ToolStripStatusLabel { Spring = true }, _summary, _progress, _exportProgress]);
 
         _root.Controls.Add(_header, 0, 0);
         _root.Controls.Add(_scanCard, 0, 1);
@@ -288,14 +289,14 @@ public sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 43));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 43));
-        var scanHeading = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+        var scanHeading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent };
+        scanHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        scanHeading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         var scanTitle = TrackLabel("New scan", new Font("Segoe UI Semibold", 12F));
-        scanTitle.Location = new Point(0, 1);
+        scanTitle.Anchor = AnchorStyles.Left;
         var importHint = TrackLabel("Import .txt/.csv • one target, range, or CIDR per line • # starts a comment", new Font("Segoe UI", 8.2F), true);
-        importHint.AutoSize = true;
-        importHint.Location = new Point(420, 4);
-        scanHeading.Resize += (_, _) => importHint.Left = Math.Max(220, scanHeading.ClientSize.Width - importHint.Width);
-        scanHeading.Controls.AddRange([scanTitle, importHint]);
+        scanHeading.Controls.Add(scanTitle, 0, 0);
+        scanHeading.Controls.Add(importHint, 1, 0);
         layout.Controls.Add(scanHeading, 0, 0);
 
         var primary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1 };
@@ -345,7 +346,16 @@ public sealed class MainForm : Form
         secondary.Controls.Add(CreateButton("Copy", "secondary", (_, _) => CopySelected()), 3, 0);
         secondary.Controls.Add(CreateButton("Clear", "secondary", (_, _) => ClearResults()), 4, 0);
         secondary.Controls.Add(CreateButton("Export CSV", "primary", (_, _) => Export("CSV")), 5, 0);
-        secondary.Controls.Add(CreateButton("More formats ▾", "secondary", (sender, _) => ShowExportMenu((Control)sender!)), 6, 0);
+        var moreFormatsButton = CreateButton("More formats ▾", "secondary", (sender, _) => ShowExportMenu((Control)sender!));
+        moreFormatsButton.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode is Keys.Down or Keys.Space or Keys.Enter)
+            {
+                e.Handled = true;
+                ShowExportMenu(moreFormatsButton);
+            }
+        };
+        secondary.Controls.Add(moreFormatsButton, 6, 0);
 
         layout.Controls.Add(primary, 0, 1);
         layout.Controls.Add(secondary, 0, 2);
@@ -379,14 +389,14 @@ public sealed class MainForm : Form
     private Panel BuildResultsToolbar()
     {
         var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(2, 10, 2, 6) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         var title = TrackLabel("Scan results", new Font("Segoe UI Semibold", 12F));
-        title.Location = new Point(2, 12);
         var hint = TrackLabel("Click a column header to sort • Target and IP use natural numeric order", new Font("Segoe UI", 8.5F), true);
-        hint.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        hint.AutoSize = true;
-        hint.Location = new Point(650, 15);
-        panel.Resize += (_, _) => hint.Left = Math.Max(280, panel.ClientSize.Width - hint.Width - 4);
-        panel.Controls.AddRange([title, hint]);
+        layout.Controls.Add(title, 0, 0);
+        layout.Controls.Add(hint, 1, 0);
+        panel.Controls.Add(layout);
         return panel;
     }
 
@@ -545,6 +555,13 @@ public sealed class MainForm : Form
         {
             _source.DataSource = new BindingList<ScanResult>(rows.ToList());
         }
+
+        // Update summary with match count.
+        var matchCount = ((BindingList<ScanResult>)_source.DataSource!).Count;
+        var totalCount = _allResults.Count;
+        _summary.Text = _search.Text.Length > 0
+            ? $"{matchCount:N0} of {totalCount:N0} shown"
+            : $"{totalCount:N0} targets";
     }
 
     private IEnumerable<ScanResult> Sort<TKey>(IEnumerable<ScanResult> rows, Func<ScanResult, TKey> key,
