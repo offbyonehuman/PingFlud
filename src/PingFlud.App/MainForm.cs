@@ -107,6 +107,13 @@ public sealed class MainForm : Form
         FormClosing += (_, _) => { _cancellation?.Cancel(); SaveState(); };
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // Windows 11: rounded corners + Mica backdrop + dark title bar.
+        DwmInterop.ApplyWindowStyling(this, _theme.IsDark);
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -987,6 +994,11 @@ public sealed class MainForm : Form
         Tag = _theme; // Expose theme to child controls (buttons need accent via FindForm().Tag)
         BackColor = _theme.WindowBackground;
         ForeColor = _theme.Foreground;
+
+        // Re-apply DWM styling when the theme changes at runtime (dark/light title bar).
+        if (IsHandleCreated)
+            DwmInterop.SetDarkMode(this, _theme.IsDark);
+
         _shell.BackColor = _theme.WindowBackground;
         _root.BackColor = _theme.WindowBackground;
         _sidebar.BackColor = _theme.SurfaceRaised;

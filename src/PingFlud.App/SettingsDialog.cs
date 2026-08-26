@@ -27,6 +27,13 @@ internal sealed class SettingsDialog : Form
         BuildContent();
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // Windows 11: rounded corners + dark title bar for the dialog.
+        DwmInterop.ApplyWindowStyling(this, _theme.IsDark);
+    }
+
     private void BuildContent()
     {
         var root = new TableLayoutPanel
