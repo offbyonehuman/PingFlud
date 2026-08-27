@@ -28,9 +28,18 @@ for flavor in ("portable", "lite"):
     for rid in ("win-x86", "win-x64", "win-arm64"):
         publish_dir = ROOT / "artifacts" / flavor / rid
         executable = publish_dir / "PingFlud.exe"
-        runtime_config = json.loads(
-            (publish_dir / "PingFlud.runtimeconfig.json").read_text(encoding="utf-8")
-        )
+        
+        # For single-file self-contained builds, runtimeconfig.json is embedded.
+        # Read it from the intermediate build output instead.
+        build_output_dir = ROOT / "src" / "PingFlud.App" / "bin" / "Release" / "net8.0-windows" / rid
+        runtime_config_path = build_output_dir / "PingFlud.runtimeconfig.json"
+        if not runtime_config_path.exists():
+            # Fallback: maybe it's in the publish dir for framework-dependent builds
+            runtime_config_path = publish_dir / "PingFlud.runtimeconfig.json"
+        if not runtime_config_path.exists():
+            raise RuntimeError(f"PingFlud.runtimeconfig.json not found for {flavor}/{rid}")
+        
+        runtime_config = json.loads(runtime_config_path.read_text(encoding="utf-8"))
         framework_entries = runtime_config["runtimeOptions"].get(
             "includedFrameworks", runtime_config["runtimeOptions"].get("frameworks", [])
         )
@@ -93,7 +102,7 @@ manifest = {
     "version": VERSION,
     "runtime_version": RUNTIME_VERSION,
     "developer": "OffByOneHuman",
-    "packaging_note": "Normal unpacked publish layout avoids compressed single-file bundling heuristics.",
+    "packaging_note": "Self-contained single-file builds with ReadyToRun compilation and compression for portable; single-file framework-dependent builds for lite.",
     "artifacts": records,
     "source": {
         "zip": source_archive.name,
