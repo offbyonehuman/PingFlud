@@ -19,6 +19,8 @@ public sealed class AppState
 
 public sealed class MainForm : Form
 {
+    private static readonly string DisplayVersion = GetDisplayVersion();
+
     private const string DocumentationText =
         "TARGET SYNTAX\n\n" +
         "Single address or host\n  192.168.1.20   server.example   ::1\n\n" +
@@ -59,7 +61,6 @@ public sealed class MainForm : Form
     private readonly ToolStripStatusLabel _status = new("Ready");
     private readonly ToolStripStatusLabel _summary = new("0 targets");
     private readonly ToolStripProgressBar _progress = new() { Minimum = 0, Maximum = 100, Width = 170 };
-    private readonly ToolStripStatusLabel _exportProgress = new(" ");
     private readonly Label _titleLabel = new() { AutoSize = true };
     private readonly Label _subtitleLabel = new() { AutoSize = true };
 
@@ -162,7 +163,7 @@ public sealed class MainForm : Form
         _emptyState = BuildEmptyState();
         _resultsCard.Controls.Add(_emptyState);
         _statusStrip = new StatusStrip { Dock = DockStyle.Fill, SizingGrip = false };
-        _statusStrip.Items.AddRange([_status, new ToolStripStatusLabel { Spring = true }, _summary, _progress, _exportProgress]);
+        _statusStrip.Items.AddRange([_status, new ToolStripStatusLabel { Spring = true }, _summary, _progress]);
 
         _root.Controls.Add(_header, 0, 0);
         _root.Controls.Add(_scanCard, 0, 1);
@@ -213,7 +214,7 @@ public sealed class MainForm : Form
         var help = new ToolStripMenuItem("Help");
         help.DropDownItems.Add("Target syntax and legend", null, (_, _) => ShowDocumentation());
         help.DropDownItems.Add("About", null, (_, _) => MessageBox.Show(this,
-            "Ping Flud\nVersion 1.4.5\nDeveloper: OffByOneHuman\n\nAn MIT-licensed independent network reachability tool.\nUse only on networks you own or are authorized to test.",
+            $"Ping Flud\nVersion {DisplayVersion}\nDeveloper: OffByOneHuman\n\nAn MIT-licensed independent network reachability tool.\nUse only on networks you own or are authorized to test.",
             "About Ping Flud", MessageBoxButtons.OK, MessageBoxIcon.Information));
 
         menu.Items.AddRange([file, edit, view, help]);
@@ -242,7 +243,7 @@ public sealed class MainForm : Form
         flow.Controls.Add(CreateSidebarButton("?   Documentation", "nav", (_, _) => ShowDocumentation()));
         AddSidebarSection(flow, "SUPPORT");
         flow.Controls.Add(CreateSidebarButton("ⓘ   About", "nav", (_, _) => MessageBox.Show(this,
-            "Ping Flud 1.4.5\nDeveloper: OffByOneHuman\n\nOpen-source network reachability scanner.",
+            $"Ping Flud {DisplayVersion}\nDeveloper: OffByOneHuman\n\nOpen-source network reachability scanner.",
             "About Ping Flud", MessageBoxButtons.OK, MessageBoxIcon.Information)));
 
         var authorization = TrackLabel("AUTHORIZED NETWORKS ONLY", new Font("Segoe UI Semibold Variable", 7.5F), true);
@@ -286,7 +287,7 @@ public sealed class MainForm : Form
         // Application.ProductVersion can include a long source-control suffix.
         // Product metadata belongs in About; the header must remain a readable
         // one-line identity at every supported window size.
-        var buildLabel = TrackLabel("Version 1.4.5  •  OffByOneHuman", new Font("Segoe UI Variable", 8.5F), true);
+        var buildLabel = TrackLabel($"Version {DisplayVersion}  •  OffByOneHuman", new Font("Segoe UI Variable", 8.5F), true);
         buildLabel.AutoSize = true;
         buildLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         buildLabel.Margin = new Padding(0, 27, 0, 0);
@@ -733,10 +734,14 @@ public sealed class MainForm : Form
         try
         {
             if (!File.Exists(_statePath)) return new AppState();
+            if (new FileInfo(_statePath).Length > 1024 * 1024) return new AppState();
             var loaded = JsonSerializer.Deserialize<AppState>(File.ReadAllText(_statePath)) ?? new AppState();
             loaded.Settings.Validate();
             loaded.ThemeName = ThemeCatalog.Get(loaded.ThemeName).Name;
+            loaded.Title = NormalizeLabel(loaded.Title, "Ping Flud", 120);
+            loaded.Subtitle = NormalizeLabel(loaded.Subtitle, string.Empty, 240);
             loaded.History = loaded.History.Where(item => !string.IsNullOrWhiteSpace(item))
+                .Select(item => item.Trim()).Where(item => item.Length <= 16_384)
                 .Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList();
             return loaded;
         }
@@ -745,12 +750,36 @@ public sealed class MainForm : Form
 
     private void SaveState()
     {
+        string? tempPath = null;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
-            File.WriteAllText(_statePath, JsonSerializer.Serialize(_state, new JsonSerializerOptions { WriteIndented = true }));
+            var directory = Path.GetDirectoryName(_statePath)!;
+            Directory.CreateDirectory(directory);
+            tempPath = Path.Combine(directory, $".{Path.GetFileName(_statePath)}.{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(_state, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(tempPath, _statePath, overwrite: true);
         }
         catch { /* The application remains usable if settings cannot be persisted. */ }
+        finally
+        {
+            try
+            {
+                if (tempPath is not null && File.Exists(tempPath)) File.Delete(tempPath);
+            }
+            catch { /* A stale temp file is harmless and can be removed later. */ }
+        }
+    }
+
+    private static string NormalizeLabel(string? value, string fallback, int maximumLength)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        return normalized.Length <= maximumLength ? normalized : normalized[..maximumLength];
+    }
+
+    private static string GetDisplayVersion()
+    {
+        var version = typeof(MainForm).Assembly.GetName().Version;
+        return version is null ? "unknown" : $"{version.Major}.{version.Minor}.{version.Build}";
     }
 
     private List<ScanResult> CurrentRows() => _source.List.Cast<object>().OfType<ScanResult>().ToList();
@@ -774,8 +803,9 @@ public sealed class MainForm : Form
         };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        // Run the export on a background thread, writing to a temp file first,
-        // then atomically publishing to the user-chosen path.
+        // Render to a staging directory beside the destination, then atomically
+        // publish the completed file(s). This prevents readers from observing a
+        // partially written report while export data is still being generated.
         var fileName = dialog.FileName;
         if (_exportCancellation is not null) return;
         var cancellation = new CancellationTokenSource();
@@ -784,16 +814,19 @@ public sealed class MainForm : Form
         try
         {
             _status.Text = "Exporting…";
-            var tempPath = Path.GetTempFileName();
+            var destinationDirectory = Path.GetDirectoryName(fileName)!;
+            var stagingDirectory = Path.Combine(destinationDirectory, $".pingflud-export-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(stagingDirectory);
             try
             {
-                await Task.Run(() => WriteExport(kind, tempPath, rows), token);
-                File.Copy(tempPath, fileName, overwrite: true);
+                var stagedPath = Path.Combine(stagingDirectory, Path.GetFileName(fileName));
+                await Task.Run(() => WriteExport(kind, stagedPath, rows), token);
+                PublishExportFiles(stagingDirectory, fileName);
                 _status.Text = $"Exported {rows.Count:N0} result(s)";
             }
             finally
             {
-                if (File.Exists(tempPath)) File.Delete(tempPath);
+                if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, recursive: true);
             }
         }
         catch (OperationCanceledException) { _status.Text = "Export cancelled"; }
@@ -806,6 +839,41 @@ public sealed class MainForm : Form
         {
             cancellation.Dispose();
             if (ReferenceEquals(_exportCancellation, cancellation)) _exportCancellation = null;
+        }
+    }
+
+    private static void PublishExportFiles(string stagingDirectory, string destinationPath)
+    {
+        var destinationDirectory = Path.GetDirectoryName(destinationPath)!;
+        var stagedFiles = Directory.EnumerateFiles(stagingDirectory).ToArray();
+        var stagedNames = stagedFiles
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Move every staged file into the destination directory. If any single
+        // move fails the caller's finally block will clean the staging directory,
+        // and previously moved files remain valid because each destination file
+        // is overwritten in place only after the corresponding source fully exists.
+        foreach (var stagedFile in stagedFiles)
+        {
+            var destination = Path.Combine(destinationDirectory, Path.GetFileName(stagedFile));
+            File.Move(stagedFile, destination, overwrite: true);
+        }
+
+        // For multi-page PNG reports, remove continuation pages from prior exports
+        // that are no longer part of the report set so stale data cannot persist.
+        if (!string.Equals(Path.GetExtension(destinationPath), ".png", StringComparison.OrdinalIgnoreCase)) return;
+
+        var stem = Path.GetFileNameWithoutExtension(destinationPath);
+        foreach (var previousPage in Directory.EnumerateFiles(destinationDirectory, $"{stem}-*.png"))
+        {
+            var fileName = Path.GetFileName(previousPage);
+            if (stagedNames.Contains(fileName)) continue;
+            var pageStem = Path.GetFileNameWithoutExtension(previousPage);
+            var suffix = pageStem.Length > stem.Length + 1 ? pageStem[(stem.Length + 1)..] : string.Empty;
+            if (suffix.Length == 3 && int.TryParse(suffix, out var pageNumber) && pageNumber >= 2)
+                File.Delete(previousPage);
         }
     }
 
@@ -862,7 +930,7 @@ public sealed class MainForm : Form
         for (var page = 0; page < pageCount; page++)
         {
             var chunk = rows.Skip(page * rowsPerImage).Take(rowsPerImage).ToList();
-            var output = pageCount == 1 ? path : Path.Combine(directory, $"{stem}-{page + 1:000}.png");
+            var output = page == 0 ? path : Path.Combine(directory, $"{stem}-{page + 1:000}.png");
             using var bitmap = new Bitmap(width, headerHeight + chunk.Count * rowHeight);
             using var graphics = Graphics.FromImage(bitmap);
             using var font = new Font("Segoe UI Variable", 9);

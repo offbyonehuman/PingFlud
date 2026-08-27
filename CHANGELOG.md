@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.4.5 - 2026-08-27
+
+- **Probe accuracy**: "Don't Fragment" now maps correctly to the ICMP option, every configured ping attempt runs so reply counts and packet-loss percentages are accurate, and DNS/ICMP operations now receive cancellation directly.
+- **Export reliability**: Multi-page PNG export now creates the selected first-page file plus numbered continuation files, removes stale continuation pages from older exports, and stages completed reports beside the destination before publication.
+- **Release hygiene**: Packaging now derives the application version from the project, includes third-party notices, and archives the complete build metadata.
 - **Scanner reliability**: Reverse DNS is now scoped to responding hosts by default (configurable) with a separate DNS timeout, instead of running for every address.
 - **Dual-stack support**: The scanner now tries all resolved addresses (IPv4 and IPv6) in order until one responds, instead of using only the first resolved address.
 - **Payload safety**: ICMP echo requests now allow fragmentation by default; "Don't Fragment" is available as an explicit MTU-testing option in Settings.

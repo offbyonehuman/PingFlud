@@ -5,14 +5,25 @@ artifacts/
 release/
 TestResults/
 
-# Visual Studio / user state
+# Visual Studio / IDE user state
 .vs/
+.idea/
+.vscode/
 *.user
 *.suo
 *.userosscache
 *.sln.docstates
+*.DotSettings.user
 
 # Local runtime state and logs
 *.log
+*.tmp
+*.pdb
+__pycache__/
+*.py[cod]
 settings.json
 .worktrees/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db

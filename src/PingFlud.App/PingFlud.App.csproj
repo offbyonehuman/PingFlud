@@ -17,12 +17,14 @@
     <AssemblyTitle>Ping Flud</AssemblyTitle>
     <Description>Fast Windows network reachability scanner and report tool.</Description>
     <Copyright>Copyright © 2026 OffByOneHuman</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
-    <PublishReadyToRun>true</PublishReadyToRun>
     <PublishTrimmed>false</PublishTrimmed>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <RuntimeFrameworkVersion>8.0.30</RuntimeFrameworkVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../PingFlud.Core/PingFlud.Core.csproj" />

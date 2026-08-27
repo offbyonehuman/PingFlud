@@ -2,17 +2,17 @@
 
 ## Reported heuristic detection
 
-An older unsigned, compressed single-file archive was reported as detected by one VirusTotal vendor:
+An older unsigned, compressed single-file executable was reported with heuristic detections on VirusTotal:
 
 ```text
-SHA-256: af36fa2473d9de1ca7230a7aac492cc81ae46f8aa7068f2001e0c17d5b03ea7c
+SHA-256: afac50bd171e16196360a94ff1acd38d5493d7b2c92cd2790379b378cd5ca891
 ```
 
-One detection is not proof of malware or proof of a false positive. The report applies only to that exact hash.
+A detection is not proof of malware or proof of a false positive. The report applies only to that exact hash.
 
 ## Current release hardening
 
-Ping Flud 1.4.1 uses a conventional unpacked .NET publish layout instead of embedding and compressing the runtime inside one executable. This makes the managed assemblies and official .NET runtime files directly inspectable by antivirus engines.
+Current public release packages use a conventional unpacked .NET publish layout instead of embedding and compressing the runtime inside one executable. This makes the managed assemblies and official .NET runtime files directly inspectable by antivirus engines.
 
 The project also provides:
 

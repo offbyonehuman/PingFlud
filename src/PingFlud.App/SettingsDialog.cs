@@ -87,9 +87,9 @@ internal sealed class SettingsDialog : Form
         var ttl = CreateNumeric(_state.Settings.Ttl, 1, 255, _theme);
         var delay = CreateNumeric(_state.Settings.DelayMs, 0, 60000, _theme);
         var cap = CreateNumeric(_state.Settings.ExpansionCap, 1, 1000000, _theme);
-        var payload = CreateTextBox(_state.Settings.Payload);
-        var title = CreateTextBox(_state.Title);
-        var subtitle = CreateTextBox(_state.Subtitle);
+        var payload = CreateTextBox(_state.Settings.Payload, 60_000);
+        var title = CreateTextBox(_state.Title, 120);
+        var subtitle = CreateTextBox(_state.Subtitle, 240);
         var dnsTimeout = CreateNumeric(_state.Settings.DnsTimeoutMs, 1, 30000, _theme);
         var dontFragment = new CheckBox
         {
@@ -200,9 +200,10 @@ internal sealed class SettingsDialog : Form
         fields.Controls.Add(input, 1, row);
     }
 
-    private TextBox CreateTextBox(string value) => new()
+    private TextBox CreateTextBox(string value, int maximumLength) => new()
     {
         Text = value,
+        MaxLength = maximumLength,
         Dock = DockStyle.Fill,
         Margin = new Padding(4, 7, 0, 7),
         BorderStyle = BorderStyle.FixedSingle,

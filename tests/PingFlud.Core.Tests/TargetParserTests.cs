@@ -49,6 +49,45 @@ public class SettingsTests
  }
 
  [Fact]
+ public async Task ScannerRunsEveryConfiguredAttemptAndCalculatesPacketLoss()
+ {
+     var fakeResolver = new FakeDnsResolver(["127.0.0.1"]);
+     var fakeProbe = new SequencePingProbe(
+         new IPingProbe.Ipv4Reply(IPStatus.Success, 8, 64),
+         null,
+         new IPingProbe.Ipv4Reply(IPStatus.Success, 3, 63));
+     var results = new Dictionary<string, ScanResult>();
+
+     await new PingScanner(fakeResolver, fakeProbe).ScanAsync(
+         ["host.example"],
+         new ScanSettings { PingsPerNode = 3, DelayMs = 0 },
+         new ImmediateProgress<ScanResult>(result => results[result.Target] = result),
+         CancellationToken.None);
+
+     var row = Assert.Single(results.Values);
+     Assert.Equal(3, fakeProbe.CallCount);
+     Assert.Equal(3, row.Attempts);
+     Assert.Equal(2, row.Successes);
+     Assert.Equal(3, row.RoundtripMs);
+     Assert.Equal(100d / 3d, row.PacketLossPercent, precision: 10);
+ }
+
+ [Fact]
+ public async Task ScannerPassesDontFragmentSettingToPingOptions()
+ {
+     var fakeResolver = new FakeDnsResolver(["127.0.0.1"]);
+     var fakeProbe = new SequencePingProbe(new IPingProbe.Ipv4Reply(IPStatus.Success, 1, 64));
+
+     await new PingScanner(fakeResolver, fakeProbe).ScanAsync(
+         ["host.example"],
+         new ScanSettings { DontFragment = true },
+         progress: null,
+         CancellationToken.None);
+
+     Assert.True(fakeProbe.LastOptions!.DontFragment);
+ }
+
+ [Fact]
  public async Task ScannerSkipsReverseDnsForNonRespondingHosts()
  {
      var fakeResolver = new FakeDnsResolver(["192.168.1.1"]);
@@ -152,4 +191,18 @@ public class SettingsTests
  {
  public ValueTask<IPingProbe.Ipv4Reply?> SendAsync(IPAddress address, int timeoutMs, byte[] payload, PingOptions options, CancellationToken ct) =>
      new(respond(address));
+ }
+
+ internal sealed class SequencePingProbe(params IPingProbe.Ipv4Reply?[] replies) : IPingProbe
+ {
+ public int CallCount { get; private set; }
+ public PingOptions? LastOptions { get; private set; }
+
+ public ValueTask<IPingProbe.Ipv4Reply?> SendAsync(IPAddress address, int timeoutMs, byte[] payload, PingOptions options, CancellationToken ct)
+ {
+     LastOptions = options;
+     var reply = replies[Math.Min(CallCount, replies.Length - 1)];
+     CallCount++;
+     return new(reply);
+ }
  }

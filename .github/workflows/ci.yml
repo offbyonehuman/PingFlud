@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, audit-hardening]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore PingFlud.sln
+
+      - name: Build
+        run: dotnet build PingFlud.sln -c Release --no-restore --nologo
+
+      - name: Test
+        run: dotnet test PingFlud.sln -c Release --no-build --nologo
+
+      - name: Audit known package vulnerabilities
+        run: dotnet list PingFlud.sln package --vulnerable --include-transitive
+        continue-on-error: false

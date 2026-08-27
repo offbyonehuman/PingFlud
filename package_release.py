@@ -5,21 +5,22 @@ import json
 import shutil
 import struct
 import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "1.4.1"
+VERSION = ET.parse(ROOT / "src" / "PingFlud.App" / "PingFlud.App.csproj").findtext(".//Version")
+if not VERSION:
+    raise RuntimeError("PingFlud.App.csproj does not define a Version.")
+RUNTIME_VERSION = ET.parse(ROOT / "src" / "PingFlud.App" / "PingFlud.App.csproj").findtext(
+    ".//RuntimeFrameworkVersion"
+)
+if not RUNTIME_VERSION:
+    raise RuntimeError("PingFlud.App.csproj does not pin a RuntimeFrameworkVersion.")
 RELEASE = ROOT / "release"
-RELEASE.mkdir(exist_ok=True)
-for previous in RELEASE.glob(f"PingFlud-{VERSION}-*"):
-    if previous.is_dir():
-        shutil.rmtree(previous)
-    else:
-        previous.unlink()
-for manifest_name in ("checksums.json", "SHA256SUMS.txt"):
-    manifest_path = RELEASE / manifest_name
-    if manifest_path.exists():
-        manifest_path.unlink()
+if RELEASE.exists():
+    shutil.rmtree(RELEASE)
+RELEASE.mkdir()
 records: list[dict[str, object]] = []
 EXPECTED_MACHINE = {"win-x86": 0x014C, "win-x64": 0x8664, "win-arm64": 0xAA64}
 
@@ -27,6 +28,18 @@ for flavor in ("portable", "lite"):
     for rid in ("win-x86", "win-x64", "win-arm64"):
         publish_dir = ROOT / "artifacts" / flavor / rid
         executable = publish_dir / "PingFlud.exe"
+        runtime_config = json.loads(
+            (publish_dir / "PingFlud.runtimeconfig.json").read_text(encoding="utf-8")
+        )
+        framework_entries = runtime_config["runtimeOptions"].get(
+            "includedFrameworks", runtime_config["runtimeOptions"].get("frameworks", [])
+        )
+        framework_versions = {entry["version"] for entry in framework_entries}
+        if framework_versions != {RUNTIME_VERSION}:
+            raise RuntimeError(
+                f"{flavor}/{rid} runtime versions {sorted(framework_versions)} "
+                f"do not match {RUNTIME_VERSION}"
+            )
         data = executable.read_bytes()
         pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
         machine = struct.unpack_from("<H", data, pe_offset + 4)[0]
@@ -41,6 +54,9 @@ for flavor in ("portable", "lite"):
             output.write(ROOT / "CHANGELOG.md", "CHANGELOG.md")
             output.write(ROOT / "SECURITY.md", "SECURITY.md")
             output.write(ROOT / "LICENSE", "LICENSE")
+            output.write(ROOT / "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md")
+            for notice in sorted(path for path in (ROOT / "third_party" / "dotnet").rglob("*") if path.is_file()):
+                output.write(notice, notice.relative_to(ROOT).as_posix())
         records.append(
             {
                 "flavor": flavor,
@@ -58,11 +74,12 @@ for flavor in ("portable", "lite"):
 
 source_archive = RELEASE / f"PingFlud-{VERSION}-source.zip"
 source_roots = [
-    ROOT / "README.md", ROOT / "CHANGELOG.md", ROOT / "SECURITY.md", ROOT / "LICENSE", ROOT / "PingFlud.sln",
+    ROOT / ".gitignore", ROOT / "README.md", ROOT / "CHANGELOG.md", ROOT / "SECURITY.md",
+    ROOT / "LICENSE", ROOT / "THIRD_PARTY_NOTICES.md", ROOT / "PingFlud.sln",
     ROOT / "build-all.cmd", ROOT / "build-all.ps1", ROOT / "package_release.py"
 ]
 source_roots += [
-    path for base in (ROOT / "src", ROOT / "tests", ROOT / "docs")
+    path for base in (ROOT / ".github", ROOT / "src", ROOT / "tests", ROOT / "third_party")
     for path in base.rglob("*")
     if path.is_file() and "bin" not in path.parts and "obj" not in path.parts
 ]
@@ -74,6 +91,7 @@ source_sha256 = hashlib.sha256(source_archive.read_bytes()).hexdigest()
 manifest = {
     "product": "Ping Flud",
     "version": VERSION,
+    "runtime_version": RUNTIME_VERSION,
     "developer": "OffByOneHuman",
     "packaging_note": "Normal unpacked publish layout avoids compressed single-file bundling heuristics.",
     "artifacts": records,

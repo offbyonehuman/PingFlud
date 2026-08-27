@@ -13,8 +13,8 @@
 - Natural numerical sorting for target and IP columns
 - Search plus Responding / Not responding filters
 - CSV, XML, HTML, PDF, PNG, TXT, and XLS-compatible exports
-- Polished dark-teal workspace with a left navigation rail and responsive content panels
-- Seven persisted themes: Midnight, Graphite, Oceanic, Forest, Amethyst, Ember, and Daylight
+- Windows 11-styled workspace with a left navigation rail and responsive content panels
+- Four persisted themes: Graphite (default), Midnight, Nebula, and Daylight
 - Self-contained portable builds for Windows x86, x64, and ARM64
 - Small framework-dependent builds for the same architectures
 
@@ -100,12 +100,9 @@ A device can be online while blocking ICMP. “Not responding” means no ICMP r
 
 Choose a theme from the **Theme** menu:
 
-- **Midnight** — dark teal surfaces with cyan accents
-- **Graphite** — neutral charcoal with blue accents
-- **Oceanic** — deep blue with bright cyan accents
-- **Forest** — dark green with mint accents
-- **Amethyst** — deep purple with violet accents
-- **Ember** — warm charcoal with amber accents
+- **Graphite** — neutral black and grey surfaces
+- **Midnight** — dark navy and slate surfaces with blue accents
+- **Nebula** — dark violet surfaces with violet accents
 - **Daylight** — light surfaces with Windows-blue accents
 
 The selected theme, scan settings, custom title/subtitle, and recent target history are stored in:
@@ -128,35 +125,33 @@ Exports contain the currently visible, filtered, and sorted result set.
 
 ## Downloads and runtime choices
 
-Each release provides two package types:
+Each release provides portable archives for Windows x86, x64, and ARM64:
 
-- **Portable** — self-contained; no .NET installation required. This is the recommended package.
-- **Lite** — much smaller, but requires the matching **.NET 8 Desktop Runtime** for x86, x64, or ARM64.
-
-Both package types use a normal unpacked .NET publish layout instead of a compressed single-file wrapper.
+- **Portable** — self-contained single-file executable (compressed, ReadyToRun); no .NET installation required. This is the recommended package.
+- **Lite** — much smaller framework—dependent build; requires the matching **.NET 8 Desktop Runtime** (v8.0.30) for x86, x64, or ARM64.
 
 ## Antivirus and trust
 
-An older unsigned, compressed single-file archive received one heuristic detection on VirusTotal. A single detection can be a false positive, but it should still be investigated rather than ignored.
+An older unsigned, compressed single-file executable received heuristic detections on VirusTotal. Heuristic detections can be false positives, but they should still be investigated rather than ignored.
 
 The current release reduces common heuristic triggers by:
 
-- removing compressed single-file bundling;
-- publishing normal .NET files that antivirus engines can inspect directly;
-- including complete source, deterministic build instructions, version metadata, and SHA-256 checksums;
-- running the automated test suite and a local Microsoft Defender scan before release.
+- using a deterministic, reproducible single-file build with explicit `RuntimeFrameworkVersion=8.0.30`;
+- enabling ReadyToRun compilation and single-file compression for smaller, inspectable payloads;
+- including complete source, deterministic build instructions, exact version metadata, and SHA-256 checksums for every artifact;
+- running the full automated test suite (42 tests) and a local Microsoft Defender scan before release.
 
 The binaries are still **unsigned**. The strongest reputation improvement would be an Authenticode code-signing certificate owned by OffByOneHuman. If a vendor flags a current checksum, submit that exact file to the vendor’s false-positive portal and include the source repository and checksums.
 
 VirusTotal report supplied for the older archive:
 
 ```text
-SHA-256: af36fa2473d9de1ca7230a7aac492cc81ae46f8aa7068f2001e0c17d5b03ea7c
+SHA-256: afac50bd171e16196360a94ff1acd38d5493d7b2c92cd2790379b378cd5ca891
 ```
 
 ## Build and test
 
-Requirements: .NET 8 SDK on Windows.
+Requirements: Windows 10 or 11 and the .NET 8 SDK. Python 3.8 or later is needed only to create release archives and checksum manifests.
 
 ```bat
 dotnet restore PingFlud.sln
@@ -180,6 +175,10 @@ artifacts\lite\win-arm64
 
 **OffByOneHuman**
 
+## Contributing and security
+
+Bug reports and focused pull requests are welcome. Please do not use real private-network details in issues or test fixtures. Report security concerns using the guidance in [SECURITY.md](SECURITY.md).
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Runtime and development dependency notices are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

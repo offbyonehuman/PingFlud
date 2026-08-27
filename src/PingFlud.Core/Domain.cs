@@ -87,10 +87,10 @@ public sealed class SystemDnsResolver : IDnsResolver
     public static SystemDnsResolver Instance { get; } = new();
 
     public async ValueTask<IPAddress[]> ResolveAddressesAsync(string host, CancellationToken ct) =>
-        await Dns.GetHostAddressesAsync(host).WaitAsync(ct);
+        await Dns.GetHostAddressesAsync(host, ct);
 
     public async ValueTask<IPHostEntry> GetHostEntryAsync(IPAddress address, CancellationToken ct) =>
-        await Dns.GetHostEntryAsync(address).WaitAsync(ct);
+        await Dns.GetHostEntryAsync(address.ToString(), ct);
 }
 
 /// <summary>
@@ -117,7 +117,7 @@ public sealed class SystemPingProbe : IPingProbe
     public async ValueTask<IPingProbe.Ipv4Reply?> SendAsync(IPAddress address, int timeoutMs, byte[] payload, PingOptions options, CancellationToken ct)
     {
         using var ping = new Ping();
-        var reply = await ping.SendPingAsync(address, timeoutMs, payload, options).WaitAsync(ct);
+        var reply = await ping.SendPingAsync(address, TimeSpan.FromMilliseconds(timeoutMs), payload, options, ct);
         return reply.Status == IPStatus.TimedOut
             ? null
             : new IPingProbe.Ipv4Reply(reply.Status, reply.RoundtripTime, reply.Options?.Ttl);
@@ -195,7 +195,7 @@ public sealed class PingScanner
             var successes = 0;
             int? replyTtl = null;
             var payload = Encoding.UTF8.GetBytes(settings.Payload ?? string.Empty);
-            var pingOptions = new PingOptions(settings.Ttl, !settings.DontFragment);
+            var pingOptions = new PingOptions(settings.Ttl, settings.DontFragment);
             var reachedAddress = string.Empty;
 
             for (var attempt = 0; attempt < settings.PingsPerNode; attempt++)
@@ -211,12 +211,9 @@ public sealed class PingScanner
                         best = Math.Min(best ?? long.MaxValue, reply.RoundtripMs);
                         replyTtl = reply.Ttl;
                         reachedAddress = candidate.ToString();
-                        goto addressesDone; // First responding address wins; stop trying other addresses.
+                        break; // One successful address completes this attempt.
                     }
                 }
-                addressesDone:
-
-                if (successes > 0) break; // Target is reachable; no need for more attempts.
 
                 if (settings.DelayMs > 0 && attempt + 1 < settings.PingsPerNode)
                     await Task.Delay(settings.DelayMs, ct);

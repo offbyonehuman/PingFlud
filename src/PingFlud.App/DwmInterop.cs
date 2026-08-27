@@ -41,8 +41,8 @@ internal static class DwmInterop
         // 2. Dark or light title bar (Windows 10 1809+).
         SetDarkMode(window, isDark);
 
-        // 3. Mica backdrop (Windows 11 22H2+). Requires the form to paint
-        //    its background with a transparent-ish brush over extended frame.
+        // 3. Mica backdrop (Windows 11 22H2+). DWM applies this best-effort;
+        //    the application remains fully usable when the material is unavailable.
         var backdrop = DWMSBT_MICA;
         _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop, sizeof(int));
     }

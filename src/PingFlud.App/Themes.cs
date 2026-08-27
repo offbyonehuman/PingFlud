@@ -5,9 +5,8 @@ using System.Drawing;
 /// <summary>
 /// Windows 11 Fluent Design theme palettes.
 /// All control-background colors are fully opaque (alpha=255) to comply with
-/// WinForms Control.BackColor requirements. Semi-transparency is used only
-/// in custom-drawn surfaces (CardPanel gradients, button hover overlays) 
-/// and alpha-channel-based selection colors.
+/// WinForms Control.BackColor requirements. Custom controls also use opaque
+/// fills to avoid repaint artifacts during hover and theme changes.
 /// </summary>
 public sealed record ThemePalette(
     string Name,

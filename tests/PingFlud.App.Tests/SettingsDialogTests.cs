@@ -121,6 +121,58 @@ public sealed class SettingsDialogTests
     }
 
     [Fact]
+    public void MultiPagePngExportCreatesTheSelectedFileAndNumberedContinuations()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"ping-flud-png-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "report.png");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            using var form = CreateMainForm();
+            var rows = Enumerable.Range(1, 101)
+                .Select(index => new PingFlud.Core.ScanResult(
+                    $"target-{index}", true, index, string.Empty, $"192.0.2.{index % 255}",
+                    "Responding", 1, 1, 0, 64))
+                .ToList();
+
+            typeof(MainForm).GetMethod("ExportImages", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(form, [path, rows]);
+
+            Assert.True(File.Exists(path));
+            Assert.True(new FileInfo(path).Length > 0);
+            Assert.True(File.Exists(Path.Combine(directory, "report-002.png")));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PublishingPngRemovesStaleContinuationFiles()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"ping-flud-publish-{Guid.NewGuid():N}");
+        var staging = Path.Combine(directory, "staging");
+        var destination = Path.Combine(directory, "report.png");
+        Directory.CreateDirectory(staging);
+        try
+        {
+            File.WriteAllText(Path.Combine(staging, "report.png"), "current");
+            File.WriteAllText(Path.Combine(directory, "report-002.png"), "stale");
+
+            typeof(MainForm).GetMethod("PublishExportFiles", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(null, [staging, destination]);
+
+            Assert.Equal("current", File.ReadAllText(destination));
+            Assert.False(File.Exists(Path.Combine(directory, "report-002.png")));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void SettingsDialogConstructsWithDefaultSettings()
     {
         using var dialog = new SettingsDialog(new AppState());
