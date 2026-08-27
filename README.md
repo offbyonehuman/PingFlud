@@ -130,25 +130,6 @@ Each release provides portable archives for Windows x86, x64, and ARM64:
 - **Portable** — self-contained single-file executable (compressed, ReadyToRun); no .NET installation required. This is the recommended package.
 - **Lite** — much smaller framework—dependent build; requires the matching **.NET 8 Desktop Runtime** (v8.0.30) for x86, x64, or ARM64.
 
-## Antivirus and trust
-
-An older unsigned, compressed single-file executable received heuristic detections on VirusTotal. Heuristic detections can be false positives, but they should still be investigated rather than ignored.
-
-The current release reduces common heuristic triggers by:
-
-- using a deterministic, reproducible single-file build with explicit `RuntimeFrameworkVersion=8.0.30`;
-- enabling ReadyToRun compilation and single-file compression for smaller, inspectable payloads;
-- including complete source, deterministic build instructions, exact version metadata, and SHA-256 checksums for every artifact;
-- running the full automated test suite (46 tests) and a local Microsoft Defender scan before release.
-
-The binaries are still **unsigned**. The strongest reputation improvement would be an Authenticode code-signing certificate owned by OffByOneHuman. If a vendor flags a current checksum, submit that exact file to the vendor’s false-positive portal and include the source repository and checksums.
-
-VirusTotal report supplied for the older archive:
-
-```text
-SHA-256: afac50bd171e16196360a94ff1acd38d5493d7b2c92cd2790379b378cd5ca891
-```
-
 ## Build and test
 
 Requirements: Windows 10 or 11 and the .NET 8 SDK. Python 3.8 or later is needed only to create release archives and checksum manifests.
