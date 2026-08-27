@@ -139,7 +139,7 @@ The current release reduces common heuristic triggers by:
 - using a deterministic, reproducible single-file build with explicit `RuntimeFrameworkVersion=8.0.30`;
 - enabling ReadyToRun compilation and single-file compression for smaller, inspectable payloads;
 - including complete source, deterministic build instructions, exact version metadata, and SHA-256 checksums for every artifact;
-- running the full automated test suite (42 tests) and a local Microsoft Defender scan before release.
+- running the full automated test suite (46 tests) and a local Microsoft Defender scan before release.
 
 The binaries are still **unsigned**. The strongest reputation improvement would be an Authenticode code-signing certificate owned by OffByOneHuman. If a vendor flags a current checksum, submit that exact file to the vendor’s false-positive portal and include the source repository and checksums.
 
