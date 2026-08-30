@@ -29,6 +29,26 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task StreamingResultsBatchesVisibleCollectionRefreshes()
+    {
+        var rows = Enumerable.Range(1, 101)
+            .Select(index =>
+            {
+                var address = $"10.0.0.{index}";
+                return new ScanResult(address, true, 1, string.Empty, address, "Responding", 1, 1, 0, 128);
+            })
+            .ToArray();
+        var model = new MainViewModel(new FakeScanRunner(rows)) { Targets = "10.0.0.0/24" };
+        var collectionChanges = 0;
+        model.Results.CollectionChanged += (_, _) => collectionChanges++;
+
+        await model.StartScanAsync();
+
+        Assert.Equal(101, model.TotalResultCount);
+        Assert.True(collectionChanges < 500, $"Expected batched refreshes, observed {collectionChanges} collection events.");
+    }
+
+    [Fact]
     public void ChangingTargetsNotifiesStartAvailability()
     {
         var model = new MainViewModel(new FakeScanRunner());

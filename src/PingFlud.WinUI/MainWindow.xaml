@@ -18,8 +18,7 @@
                                     Tapped="AboutNavigation_Tapped" />
             </NavigationView.MenuItems>
 
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                <Grid Padding="28,20,28,16" RowSpacing="14">
+            <Grid Padding="28,20,28,16" RowSpacing="14">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -37,7 +36,7 @@
                             <TextBlock x:Name="TitleText" Text="Ping Flud" Style="{StaticResource TitleTextBlockStyle}" />
                             <TextBlock x:Name="SubtitleText" Text="Fast, transparent network reachability checks" Foreground="{StaticResource MutedTextBrush}" />
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="Version 1.5.1  •  OffByOneHuman" VerticalAlignment="Center"
+                        <TextBlock Grid.Column="1" Text="Version 1.5.2  •  OffByOneHuman" VerticalAlignment="Center"
                                    Foreground="{StaticResource MutedTextBrush}" />
                     </Grid>
 
@@ -62,10 +61,10 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Targets" VerticalAlignment="Center" FontWeight="SemiBold" />
-                                <TextBox x:Name="TargetsBox" Grid.Column="1" Text="{x:Bind ViewModel.Targets, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         PlaceholderText="192.168.1.1, server.example, 10.0.0.0/24"
-                                         IsEnabled="{x:Bind ViewModel.CanEditTargets, Mode=OneWay}"
-                                         KeyDown="TargetsBox_KeyDown" AutomationProperties.Name="Targets" />
+                                <ComboBox x:Name="TargetsBox" Grid.Column="1" IsEditable="True" ItemsSource="{x:Bind TargetHistory}"
+                                          Text="{x:Bind ViewModel.Targets, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{x:Bind ViewModel.CanEditTargets, Mode=OneWay}"
+                                          KeyDown="TargetsBox_KeyDown" AutomationProperties.Name="Targets" />
                                 <Button Grid.Column="2" Content="Start scan" Click="StartButton_Click"
                                         IsEnabled="{x:Bind ViewModel.CanStart, Mode=OneWay}" AutomationProperties.Name="Start scan" />
                                 <Button Grid.Column="3" Content="Stop" Click="StopButton_Click"
@@ -185,8 +184,7 @@
                                    Foreground="{StaticResource MutedTextBrush}" />
                         <ProgressBar Grid.Column="2" Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}" />
                     </Grid>
-                </Grid>
-            </ScrollViewer>
+            </Grid>
         </NavigationView>
     </Grid>
 </Window>

@@ -19,6 +19,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isScanning;
     private int _completed;
     private int _total;
+    private int _respondingCount;
+    private int _pendingVisibleRefreshes;
     private ResultFilter _filter;
     private string _search = string.Empty;
     private string _sortProperty = nameof(ScanResult.Address);
@@ -168,6 +170,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(TotalResultCount));
             OnPropertyChanged(nameof(HasResults));
             _completed = 0;
+            _respondingCount = 0;
+            _pendingVisibleRefreshes = 0;
             _total = expanded.Count;
             Summary = $"0 of {_total:N0} complete";
             Status = "Scanning…";
@@ -192,6 +196,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
+            FlushVisibleResults();
             IsScanning = false;
         }
     }
@@ -221,6 +226,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Results.Clear();
         _completed = 0;
         _total = 0;
+        _respondingCount = 0;
+        _pendingVisibleRefreshes = 0;
         ProgressPercent = 0;
         Status = "Ready";
         Summary = "0 targets";
@@ -261,7 +268,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void CancelExport() => _exportCancellation?.Cancel();
 
-    internal void ApplyTestResult(ScanResult result) => ApplyScanResult(result);
+    internal void ApplyTestResult(ScanResult result)
+    {
+        ApplyScanResult(result);
+        FlushVisibleResults();
+    }
 
     private void ApplyScanResult(ScanResult result)
     {
@@ -280,9 +291,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(HasResults));
         }
 
-        RebuildVisibleResults();
+        if (result.Responding) _respondingCount++;
+        if (++_pendingVisibleRefreshes >= 100) FlushVisibleResults();
         ProgressPercent = _total == 0 ? 0 : (int)Math.Round(100d * _completed / _total);
-        Summary = $"{_completed:N0} of {_total:N0} complete • {_allResults.Count(row => row.Responding):N0} responding";
+        Summary = $"{_completed:N0} of {_total:N0} complete • {_respondingCount:N0} responding";
+    }
+
+    private void FlushVisibleResults()
+    {
+        if (_pendingVisibleRefreshes == 0) return;
+        _pendingVisibleRefreshes = 0;
+        RebuildVisibleResults();
     }
 
     private void RebuildVisibleResults()

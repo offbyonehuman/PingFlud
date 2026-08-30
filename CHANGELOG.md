@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.5.2 - 2026-08-30
+
+- Batched streamed result-grid refreshes so large scans do not rebuild the full visible collection for every reply.
+- Clamped initial window size to the active display and restored ListView viewport scrolling.
+- Exposed persisted target history in the editable target picker and made state saving best-effort at shutdown.
+
 ## 1.5.1 - 2026-08-30
 
 - Migrated the release shell to WinUI 3 while keeping the scanner and report domain logic in `PingFlud.Core`.

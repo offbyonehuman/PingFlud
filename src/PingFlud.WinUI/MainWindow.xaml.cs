@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
@@ -21,11 +22,13 @@ public sealed partial class MainWindow : Window
     private readonly AppState _state;
 
     public MainViewModel ViewModel { get; }
+    public ObservableCollection<string> TargetHistory { get; }
 
     public MainWindow()
     {
         _stateStore = new JsonAppStateStore();
         _state = _stateStore.Load();
+        TargetHistory = new ObservableCollection<string>(_state.History);
         ViewModel = new MainViewModel(new PingScanRunner(), new DispatcherQueueUiDispatcher(DispatcherQueue))
         {
             Settings = _state.Settings
@@ -44,7 +47,7 @@ public sealed partial class MainWindow : Window
         {
             ViewModel.Dispose();
             _state.Settings = ViewModel.Settings;
-            _stateStore.Save(_state);
+            SaveStateSafely();
         };
 
         ConfigureWindow();
@@ -55,15 +58,15 @@ public sealed partial class MainWindow : Window
         var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(windowHandle);
         var appWindow = AppWindow.GetFromWindowId(windowId);
-        appWindow.Resize(new SizeInt32(1420, 900));
-
         var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary);
-        if (displayArea is not null)
-        {
-            var x = displayArea.WorkArea.X + Math.Max(0, (displayArea.WorkArea.Width - 1420) / 2);
-            var y = displayArea.WorkArea.Y + Math.Max(0, (displayArea.WorkArea.Height - 900) / 2);
-            appWindow.Move(new PointInt32(x, y));
-        }
+        if (displayArea is null) return;
+
+        var width = Math.Min(1420, displayArea.WorkArea.Width);
+        var height = Math.Min(900, displayArea.WorkArea.Height);
+        appWindow.Resize(new SizeInt32(width, height));
+        var x = displayArea.WorkArea.X + Math.Max(0, (displayArea.WorkArea.Width - width) / 2);
+        var y = displayArea.WorkArea.Y + Math.Max(0, (displayArea.WorkArea.Height - height) / 2);
+        appWindow.Move(new PointInt32(x, y));
     }
 
     private void ApplyState()
@@ -142,8 +145,10 @@ public sealed partial class MainWindow : Window
         if (ViewModel.Status != "Scan complete") return;
 
         _state.Remember(ViewModel.Targets);
+        TargetHistory.Clear();
+        foreach (var target in _state.History) TargetHistory.Add(target);
         _state.Settings = ViewModel.Settings;
-        _stateStore.Save(_state);
+        SaveStateSafely();
     }
 
     private async void ImportButton_Click(object sender, RoutedEventArgs e)
@@ -197,7 +202,7 @@ public sealed partial class MainWindow : Window
     private async void AboutNavigation_Tapped(object sender, TappedRoutedEventArgs e) =>
         await ShowMessageAsync(
             "About Ping Flud",
-            "Ping Flud 1.5.1\nFast, transparent network reachability checks.\n\nCopyright © 2026 OffByOneHuman\nLicensed under MIT.");
+            "Ping Flud 1.5.2\nFast, transparent network reachability checks.\n\nCopyright © 2026 OffByOneHuman\nLicensed under MIT.");
 
     private async void SyntaxHelpButton_Click(object sender, RoutedEventArgs e) =>
         await ShowDocumentationAsync();
@@ -220,7 +225,7 @@ public sealed partial class MainWindow : Window
 
         ViewModel.Settings = _state.Settings;
         ApplyState();
-        _stateStore.Save(_state);
+        SaveStateSafely();
     }
 
     private void StopButton_Click(object sender, RoutedEventArgs e) =>
@@ -307,6 +312,18 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             await ShowMessageAsync("Export failed", ex.Message);
+        }
+    }
+
+    private void SaveStateSafely()
+    {
+        try
+        {
+            _stateStore.Save(_state);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Persistence is best-effort; a failed save must not prevent shutdown or scanning.
         }
     }
 
