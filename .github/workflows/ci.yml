@@ -31,5 +31,22 @@ jobs:
         run: dotnet test PingFlud.sln -c Release --no-build --nologo
 
       - name: Audit known package vulnerabilities
-        run: dotnet list PingFlud.sln package --vulnerable --include-transitive
-        continue-on-error: false
+        shell: pwsh
+        run: |
+          $projects = @(
+            'src/PingFlud.Core/PingFlud.Core.csproj',
+            'src/PingFlud.App/PingFlud.App.csproj',
+            'src/PingFlud.Application/PingFlud.Application.csproj',
+            'src/PingFlud.WinUI/PingFlud.WinUI.csproj',
+            'tests/PingFlud.Core.Tests/PingFlud.Core.Tests.csproj',
+            'tests/PingFlud.App.Tests/PingFlud.App.Tests.csproj',
+            'tests/PingFlud.Application.Tests/PingFlud.Application.Tests.csproj'
+          )
+          foreach ($project in $projects) {
+            if ($project -like '*PingFlud.Application.csproj') {
+              dotnet list $project package --vulnerable --include-transitive --framework net8.0
+            } else {
+              dotnet list $project package --vulnerable --include-transitive
+            }
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }

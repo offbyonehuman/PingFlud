@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.5.1 - 2026-08-30
+
+- Migrated the release shell to WinUI 3 while keeping the scanner and report domain logic in `PingFlud.Core`.
+- Fixed target editing on a new empty scan, and wired Documentation, About, and target-syntax actions.
+- Added compact runtime-dependent and compressed portable WinUI releases for x86, x64, and ARM64.
+- Hardened report publishing: stage output before publication, remove stale PNG continuation pages, export the visible filtered rows, and neutralize formula prefixes in every spreadsheet-compatible HTML text cell.
+- Added regression coverage for export publication, filtering, formula neutralization, and command availability.
+
 ## 1.4.5 - 2026-08-27
 
 - **Probe accuracy**: "Don't Fragment" now maps correctly to the ICMP option, every configured ping attempt runs so reply counts and packet-loss percentages are accurate, and DNS/ICMP operations now receive cancellation directly.

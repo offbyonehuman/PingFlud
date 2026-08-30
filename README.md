@@ -12,20 +12,19 @@
 - Reverse DNS, latency, packet loss, reply count, and TTL
 - Natural numerical sorting for target and IP columns
 - Search plus Responding / Not responding filters
-- CSV, XML, HTML, PDF, PNG, TXT, and XLS-compatible exports
-- Windows 11-styled workspace with a left navigation rail and responsive content panels
+- CSV, HTML, PDF, PNG, and TXT exports
+- Windows 11 WinUI workspace with a left navigation rail and responsive content panels
 - Four persisted themes: Graphite (default), Midnight, Nebula, and Daylight
-- Self-contained portable builds for Windows x86, x64, and ARM64
-- Small framework-dependent builds for the same architectures
+- Compact runtime-dependent builds and portable self-contained builds for Windows x86, x64, and ARM64
 
 ## Quick start
 
 1. Enter one or more targets in the **Targets** field.
 2. Separate multiple specifications with commas or new lines.
 3. Press **Enter** in the Targets field or select **Start scan**.
-4. Use **Show** and **Search** to filter the visible report without leaving the scan workspace.
+4. Use **All results**, **Responding**, or **Not responding** and **Search results** to filter the visible report without leaving the scan workspace.
 5. Results are initially sorted by **IP address, lowest to highest**. Click any column heading to change the sort; Target and IP columns use numerical network ordering.
-6. Select **Export CSV** or **More formats** to save the currently visible rows.
+6. Select **Export…** to save the currently visible rows.
 
 ## Importing target lists
 
@@ -116,19 +115,18 @@ The selected theme, scan settings, custom title/subtitle, and recent target hist
 Exports contain the currently visible, filtered, and sorted result set.
 
 - **CSV** — UTF-8 report with spreadsheet-formula neutralization
-- **XML** — structured `PingFludResults` document
-- **HTML** — theme-aware standalone report
+- **HTML** — standalone web report
+- **HTML (Excel)** — spreadsheet-compatible HTML with formula-neutralization for untrusted text cells
 - **PDF** — paginated summary report
 - **PNG** — full result images; large reports split into numbered files
 - **TXT** — tab-separated plain text
-- **XLS-compatible HTML** — HTML table readable by spreadsheet applications
 
 ## Downloads and runtime choices
 
-Each release provides portable archives for Windows x86, x64, and ARM64:
+Each release provides two archive types for Windows x86, x64, and ARM64:
 
-- **Portable** — self-contained single-file executable (compressed, ReadyToRun); no .NET installation required. This is the recommended package.
-- **Lite** — much smaller framework—dependent build; requires the matching **.NET 8 Desktop Runtime** (v8.0.30) for x86, x64, or ARM64.
+- **Compact** — runtime-dependent multi-file package. Requires the matching **.NET 8 Desktop Runtime** and **Windows App Runtime 1.8** for the selected architecture. It is the smaller download.
+- **Portable** — compressed, self-contained single executable. No .NET Desktop Runtime or Windows App Runtime installation is required. It is the offline/clean-machine option.
 
 ## Build and test
 
@@ -144,12 +142,12 @@ python package_release.py
 Build outputs:
 
 ```text
-artifacts\portable\win-x86
-artifacts\portable\win-x64
-artifacts\portable\win-arm64
-artifacts\lite\win-x86
-artifacts\lite\win-x64
-artifacts\lite\win-arm64
+artifacts\winui-compact\win-x86
+artifacts\winui-compact\win-x64
+artifacts\winui-compact\win-arm64
+artifacts\winui-portable\win-x86
+artifacts\winui-portable\win-x64
+artifacts\winui-portable\win-arm64
 ```
 
 ## Developer

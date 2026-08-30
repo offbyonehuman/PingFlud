@@ -9,63 +9,63 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-VERSION = ET.parse(ROOT / "src" / "PingFlud.App" / "PingFlud.App.csproj").findtext(".//Version")
-if not VERSION:
-    raise RuntimeError("PingFlud.App.csproj does not define a Version.")
-RUNTIME_VERSION = ET.parse(ROOT / "src" / "PingFlud.App" / "PingFlud.App.csproj").findtext(
-    ".//RuntimeFrameworkVersion"
+PROJECT = ROOT / "src" / "PingFlud.WinUI" / "PingFlud.WinUI.csproj"
+PROJECT_ROOT = ET.parse(PROJECT).getroot()
+VERSION = PROJECT_ROOT.findtext(".//Version")
+WINDOWS_APP_SDK_VERSION = next(
+    (
+        reference.attrib["Version"]
+        for reference in PROJECT_ROOT.findall(".//PackageReference")
+        if reference.attrib.get("Include") == "Microsoft.WindowsAppSDK"
+    ),
+    None,
 )
-if not RUNTIME_VERSION:
-    raise RuntimeError("PingFlud.App.csproj does not pin a RuntimeFrameworkVersion.")
+if not VERSION or not WINDOWS_APP_SDK_VERSION:
+    raise RuntimeError("PingFlud.WinUI.csproj must define Version and Microsoft.WindowsAppSDK.")
+
 RELEASE = ROOT / "release"
 if RELEASE.exists():
     shutil.rmtree(RELEASE)
 RELEASE.mkdir()
-records: list[dict[str, object]] = []
-EXPECTED_MACHINE = {"win-x86": 0x014C, "win-x64": 0x8664, "win-arm64": 0xAA64}
 
-for flavor in ("portable", "lite"):
-    for rid in ("win-x86", "win-x64", "win-arm64"):
-        publish_dir = ROOT / "artifacts" / flavor / rid
+EXPECTED_MACHINE = {"win-x86": 0x014C, "win-x64": 0x8664, "win-arm64": 0xAA64}
+FLAVORS = {
+    "compact": ROOT / "artifacts" / "winui-compact",
+    "portable": ROOT / "artifacts" / "winui-portable",
+}
+SDK_PACKAGE = Path.home() / ".nuget" / "packages" / "microsoft.windowsappsdk" / WINDOWS_APP_SDK_VERSION.lower()
+SDK_NOTICE_FILES = (SDK_PACKAGE / "license.txt", SDK_PACKAGE / "NOTICE.txt")
+if not all(path.is_file() for path in SDK_NOTICE_FILES):
+    raise RuntimeError("Restore Microsoft.WindowsAppSDK before packaging the release.")
+
+records: list[dict[str, object]] = []
+for flavor, artifact_root in FLAVORS.items():
+    for rid, expected_machine in EXPECTED_MACHINE.items():
+        publish_dir = artifact_root / rid
         executable = publish_dir / "PingFlud.exe"
-        
-        # For single-file self-contained builds, runtimeconfig.json is embedded.
-        # Read it from the intermediate build output instead.
-        build_output_dir = ROOT / "src" / "PingFlud.App" / "bin" / "Release" / "net8.0-windows" / rid
-        runtime_config_path = build_output_dir / "PingFlud.runtimeconfig.json"
-        if not runtime_config_path.exists():
-            # Fallback: maybe it's in the publish dir for framework-dependent builds
-            runtime_config_path = publish_dir / "PingFlud.runtimeconfig.json"
-        if not runtime_config_path.exists():
-            raise RuntimeError(f"PingFlud.runtimeconfig.json not found for {flavor}/{rid}")
-        
-        runtime_config = json.loads(runtime_config_path.read_text(encoding="utf-8"))
-        framework_entries = runtime_config["runtimeOptions"].get(
-            "includedFrameworks", runtime_config["runtimeOptions"].get("frameworks", [])
-        )
-        framework_versions = {entry["version"] for entry in framework_entries}
-        if framework_versions != {RUNTIME_VERSION}:
-            raise RuntimeError(
-                f"{flavor}/{rid} runtime versions {sorted(framework_versions)} "
-                f"do not match {RUNTIME_VERSION}"
-            )
+        if not executable.is_file():
+            raise RuntimeError(f"Missing published executable: {executable}")
+
         data = executable.read_bytes()
         pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
         machine = struct.unpack_from("<H", data, pe_offset + 4)[0]
-        if machine != EXPECTED_MACHINE[rid]:
-            raise RuntimeError(f"{rid} produced PE machine 0x{machine:04x}, expected 0x{EXPECTED_MACHINE[rid]:04x}")
+        if machine != expected_machine:
+            raise RuntimeError(
+                f"{flavor}/{rid} produced PE machine 0x{machine:04x}, expected 0x{expected_machine:04x}"
+            )
+
         archive = RELEASE / f"PingFlud-{VERSION}-{rid}-{flavor}.zip"
         files = sorted(path for path in publish_dir.rglob("*") if path.is_file())
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as output:
             for path in files:
                 output.write(path, path.relative_to(publish_dir).as_posix())
-            output.write(ROOT / "README.md", "README.md")
-            output.write(ROOT / "CHANGELOG.md", "CHANGELOG.md")
-            output.write(ROOT / "SECURITY.md", "SECURITY.md")
-            output.write(ROOT / "LICENSE", "LICENSE")
-            output.write(ROOT / "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md")
+            for document in ("README.md", "CHANGELOG.md", "SECURITY.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
+                output.write(ROOT / document, document)
+            output.write(SDK_NOTICE_FILES[0], "third_party/windowsappsdk/LICENSE.txt")
+            output.write(SDK_NOTICE_FILES[1], "third_party/windowsappsdk/NOTICE.txt")
             for notice in sorted(path for path in (ROOT / "third_party" / "dotnet").rglob("*") if path.is_file()):
                 output.write(notice, notice.relative_to(ROOT).as_posix())
+
         records.append(
             {
                 "flavor": flavor,
@@ -77,18 +77,30 @@ for flavor in ("portable", "lite"):
                 "zip": archive.name,
                 "zip_bytes": archive.stat().st_size,
                 "zip_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-                "runtime_requirement": "none" if flavor == "portable" else ".NET 8 Desktop Runtime matching the architecture",
+                "runtime_requirement": (
+                    "none (self-contained)"
+                    if flavor == "portable"
+                    else ".NET 8 Desktop Runtime and Windows App Runtime 1.8 matching the architecture"
+                ),
             }
         )
 
 source_archive = RELEASE / f"PingFlud-{VERSION}-source.zip"
 source_roots = [
-    ROOT / ".gitignore", ROOT / "README.md", ROOT / "CHANGELOG.md", ROOT / "SECURITY.md",
-    ROOT / "LICENSE", ROOT / "THIRD_PARTY_NOTICES.md", ROOT / "PingFlud.sln",
-    ROOT / "build-all.cmd", ROOT / "build-all.ps1", ROOT / "package_release.py"
+    ROOT / ".gitignore",
+    ROOT / "README.md",
+    ROOT / "CHANGELOG.md",
+    ROOT / "SECURITY.md",
+    ROOT / "LICENSE",
+    ROOT / "THIRD_PARTY_NOTICES.md",
+    ROOT / "PingFlud.sln",
+    ROOT / "build-all.cmd",
+    ROOT / "build-all.ps1",
+    ROOT / "package_release.py",
 ]
 source_roots += [
-    path for base in (ROOT / ".github", ROOT / "src", ROOT / "tests", ROOT / "third_party")
+    path
+    for base in (ROOT / ".github", ROOT / "src", ROOT / "tests", ROOT / "third_party")
     for path in base.rglob("*")
     if path.is_file() and "bin" not in path.parts and "obj" not in path.parts
 ]
@@ -100,9 +112,9 @@ source_sha256 = hashlib.sha256(source_archive.read_bytes()).hexdigest()
 manifest = {
     "product": "Ping Flud",
     "version": VERSION,
-    "runtime_version": RUNTIME_VERSION,
+    "windows_app_sdk_version": WINDOWS_APP_SDK_VERSION,
     "developer": "OffByOneHuman",
-    "packaging_note": "Self-contained single-file builds with ReadyToRun compilation and compression for portable; single-file framework-dependent builds for lite.",
+    "packaging_note": "Compact runtime-dependent and compressed self-contained WinUI 3 distributions.",
     "artifacts": records,
     "source": {
         "zip": source_archive.name,

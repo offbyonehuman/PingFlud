@@ -1,9 +1,9 @@
 using System.Text;
 using PingFlud.Core;
 
-namespace PingFlud.App;
+namespace PingFlud.Application;
 
-internal static class SimplePdf
+public static class SimplePdf
 {
     public static void Write(string path, IEnumerable<ScanResult> rows)
     {
@@ -68,7 +68,7 @@ internal static class SimplePdf
     {
         var ascii = new StringBuilder();
         foreach (var rune in value.EnumerateRunes())
-            ascii.Append(rune.Value < 128 ? ((char)rune.Value).ToString() : $"\\u{{{rune.Value:X}}}");
+            ascii.Append(rune.Value < 128 ? (char)rune.Value : $"\\u{{{rune.Value:X}}}");
         return ascii.ToString().Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
     }
 }

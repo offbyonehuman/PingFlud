@@ -1,0 +1,40 @@
+using PingFlud.Application;
+using Xunit;
+
+namespace PingFlud.Application.Tests;
+
+public sealed class SettingsDraftTests
+{
+    [Fact]
+    public void InvalidDraftDoesNotMutateState()
+    {
+        var state = new AppState();
+        var draft = SettingsDraft.From(state);
+        draft.MaxOutstanding = 0;
+
+        var applied = draft.TryApply(state, out var error);
+
+        Assert.False(applied);
+        Assert.NotEmpty(error);
+        Assert.Equal(64, state.Settings.MaxOutstanding);
+    }
+
+    [Fact]
+    public void ValidDraftAppliesSettingsAndBranding()
+    {
+        var state = new AppState();
+        var draft = SettingsDraft.From(state);
+        draft.TimeoutMs = 2500;
+        draft.Title = "  Lab scanner  ";
+        draft.Subtitle = " Authorized segment ";
+        draft.ThemeName = "Midnight";
+
+        var applied = draft.TryApply(state, out var error);
+
+        Assert.True(applied, error);
+        Assert.Equal(2500, state.Settings.TimeoutMs);
+        Assert.Equal("Lab scanner", state.Title);
+        Assert.Equal("Authorized segment", state.Subtitle);
+        Assert.Equal("Midnight", state.ThemeName);
+    }
+}

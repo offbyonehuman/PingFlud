@@ -1,4 +1,5 @@
 using PingFlud.App;
+using PingFlud.Application;
 using Xunit;
 
 namespace PingFlud.App.Tests;
