@@ -1,5 +1,7 @@
 # Ping Flud
 
+[![CI](https://github.com/offbyonehuman/PingFlud/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/offbyonehuman/PingFlud/actions/workflows/ci.yml) [![Latest release](https://img.shields.io/github/v/release/offbyonehuman/PingFlud)](https://github.com/offbyonehuman/PingFlud/releases/latest)
+
 **Ping Flud** is an open-source Windows network reachability scanner by **OffByOneHuman**. It performs bounded, concurrent ICMP checks, resolves reverse DNS names, displays packet statistics, and exports filtered results in several report formats.
 
 > Use Ping Flud only on systems and networks that you own or are explicitly authorized to test.
