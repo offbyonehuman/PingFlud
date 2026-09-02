@@ -6,6 +6,32 @@ namespace PingFlud.Application.Tests;
 
 public sealed class ExportServiceTests
 {
+    [Fact]
+    public void PngCleanupRemovesContinuationPagesBeyond999()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"pingflud-png-pages-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "report-002.png"), string.Empty);
+            File.WriteAllText(Path.Combine(directory, "report-1000.png"), string.Empty);
+            File.WriteAllText(Path.Combine(directory, "report-note.png"), string.Empty);
+
+            ExportService.RemoveStalePngPages(
+                directory,
+                "report",
+                new HashSet<string>(["report.png", "report-002.png"], StringComparer.OrdinalIgnoreCase));
+
+            Assert.True(File.Exists(Path.Combine(directory, "report-002.png")));
+            Assert.False(File.Exists(Path.Combine(directory, "report-1000.png")));
+            Assert.True(File.Exists(Path.Combine(directory, "report-note.png")));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static readonly ScanResult Sample = new(
         Target: "host, with comma",
         Responding: true,

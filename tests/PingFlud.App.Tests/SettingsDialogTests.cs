@@ -35,12 +35,22 @@ public sealed class SettingsDialogTests
     public void ProvidesOnlySupportedThemes()
     {
         Assert.Equal("Graphite", new AppState().ThemeName);
-        Assert.Equal(["Graphite", "Midnight", "Nebula", "Daylight"], ThemeCatalog.All.Select(theme => theme.Name));
+        Assert.Equal(["Graphite", "Daylight"], ThemeCatalog.All.Select(theme => theme.Name));
         var graphite = ThemeCatalog.Get("Graphite");
         Assert.True(graphite.IsDark);
         Assert.True(graphite.WindowBackground.R < 24 && graphite.WindowBackground.G < 24 && graphite.WindowBackground.B < 24);
         Assert.True(graphite.Surface.R > graphite.WindowBackground.R);
         Assert.All(ThemeCatalog.All, theme => Assert.NotEqual(theme.WindowBackground, theme.Foreground));
+        Assert.All(AppearanceModes.All, palette =>
+        {
+            var theme = ThemeCatalog.Get(palette.Name);
+            Assert.Equal(unchecked((int)palette.WindowBackground), theme.WindowBackground.ToArgb());
+            Assert.Equal(unchecked((int)palette.Surface), theme.Surface.ToArgb());
+            Assert.Equal(unchecked((int)palette.SurfaceRaised), theme.SurfaceRaised.ToArgb());
+            Assert.Equal(unchecked((int)palette.Header), theme.Header.ToArgb());
+            Assert.Equal(unchecked((int)palette.Border), theme.Border.ToArgb());
+            Assert.Equal(unchecked((int)palette.MutedForeground), theme.MutedForeground.ToArgb());
+        });
     }
 
     [Fact]
@@ -52,8 +62,8 @@ public sealed class SettingsDialogTests
         form.SelectTheme("Daylight");
         Assert.Equal(ThemeCatalog.Get("Daylight").WindowBackground, form.BackColor);
 
-        form.SelectTheme("Midnight");
-        Assert.Equal(ThemeCatalog.Get("Midnight").WindowBackground, form.BackColor);
+        form.SelectTheme("Graphite");
+        Assert.Equal(ThemeCatalog.Get("Graphite").WindowBackground, form.BackColor);
     }
 
     [Fact]
@@ -63,8 +73,8 @@ public sealed class SettingsDialogTests
         var controls = Descendants(form).ToList();
 
         var labels = controls.OfType<Label>().ToList();
-        Assert.Contains(labels, label => label.Text == "No scan results yet");
-        Assert.Contains(labels, label => label.Text.Contains("host, IP address, range, or CIDR"));
+        Assert.Contains(labels, label => label.Text == "No reachability results yet");
+        Assert.Contains(labels, label => label.Text.Contains("latency, packet loss, TTL, and reverse DNS"));
         Assert.DoesNotContain(labels, label => label.Text.Contains("Examples:"));
         Assert.DoesNotContain(labels, label => label.Text.Contains("exactly one decimal digit"));
         Assert.Contains(labels, label => label.Text.Contains("WORKSPACE"));
@@ -179,11 +189,29 @@ public sealed class SettingsDialogTests
         using var dialog = new SettingsDialog(new AppState());
         dialog.CreateControl();
         dialog.PerformLayout();
-        var subtitle = Descendants(dialog).OfType<TextBox>().Single(control => control.Text == "Fast, transparent network reachability checks");
+        var subtitle = Descendants(dialog).OfType<TextBox>().Single(control => control.Text == "Network reachability testing and troubleshooting");
         Assert.Equal("Scan settings", dialog.Text);
         Assert.True(dialog.ClientSize.Width >= 640);
         Assert.True(dialog.ClientSize.Height >= 660);
         Assert.True(subtitle.Width >= 300);
+    }
+
+    [Fact]
+    public void SettingsDialogProvidesAWorkingAppearanceToggle()
+    {
+        var state = new AppState();
+        using var dialog = new SettingsDialog(state);
+        dialog.CreateControl();
+        dialog.PerformLayout();
+
+        var toggle = Descendants(dialog).OfType<CheckBox>()
+            .Single(control => control.AccessibleName == "Appearance mode");
+        Assert.Equal(Appearance.Button, toggle.Appearance);
+        Assert.True(toggle.Checked);
+        Assert.Equal("Dark mode", toggle.Text);
+
+        toggle.Checked = false;
+        Assert.Equal("Light mode", toggle.Text);
     }
 
     [Theory]
@@ -210,7 +238,7 @@ public sealed class SettingsDialogTests
     [Fact]
     public void SettingsDialogUsesTheActiveThemeForEveryEditableControl()
     {
-        var theme = ThemeCatalog.Get("Midnight");
+        var theme = ThemeCatalog.Get("Daylight");
         using var dialog = new SettingsDialog(new AppState(), theme);
         dialog.CreateControl();
 

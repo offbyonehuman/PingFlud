@@ -27,7 +27,7 @@ public sealed class SettingsDraftTests
         draft.TimeoutMs = 2500;
         draft.Title = "  Lab scanner  ";
         draft.Subtitle = " Authorized segment ";
-        draft.ThemeName = "Midnight";
+        draft.ThemeName = "Daylight";
 
         var applied = draft.TryApply(state, out var error);
 
@@ -35,6 +35,30 @@ public sealed class SettingsDraftTests
         Assert.Equal(2500, state.Settings.TimeoutMs);
         Assert.Equal("Lab scanner", state.Title);
         Assert.Equal("Authorized segment", state.Subtitle);
-        Assert.Equal("Midnight", state.ThemeName);
+        Assert.Equal("Daylight", state.ThemeName);
+    }
+
+    [Fact]
+    public void RemovedThemeCannotBeApplied()
+    {
+        var state = new AppState();
+        var draft = SettingsDraft.From(state);
+        draft.ThemeName = "Nebula";
+
+        var applied = draft.TryApply(state, out var error);
+
+        Assert.False(applied);
+        Assert.Contains("Unsupported theme", error);
+        Assert.Equal("Graphite", state.ThemeName);
+    }
+
+    [Theory]
+    [InlineData(true, "Graphite")]
+    [InlineData(false, "Daylight")]
+    public void AppearanceToggleMapsToSupportedTheme(bool isDarkMode, string expectedTheme)
+    {
+        var draft = new SettingsDraft { IsDarkMode = isDarkMode };
+
+        Assert.Equal(expectedTheme, draft.ThemeName);
     }
 }

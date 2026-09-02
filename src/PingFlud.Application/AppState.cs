@@ -1,20 +1,24 @@
 using System.Text.Json;
+using System.Text;
 using PingFlud.Core;
 
 namespace PingFlud.Application;
 
 public sealed class AppState
 {
+    internal const int MaximumRememberedTargetBytes = 16_384;
+    public const string DefaultSubtitle = "Network reachability testing and troubleshooting";
+
     public ScanSettings Settings { get; set; } = new();
     public List<string> History { get; set; } = [];
     public string Title { get; set; } = "Ping Flud";
-    public string Subtitle { get; set; } = "Fast, transparent network reachability checks";
-    public string ThemeName { get; set; } = "Graphite";
+    public string Subtitle { get; set; } = DefaultSubtitle;
+    public string ThemeName { get; set; } = AppearanceModes.DarkMode;
 
     public void Remember(string value)
     {
         value = value.Trim();
-        if (value.Length == 0) return;
+        if (value.Length == 0 || Encoding.UTF8.GetByteCount(value) > MaximumRememberedTargetBytes) return;
         History.RemoveAll(existing => existing.Equals(value, StringComparison.OrdinalIgnoreCase));
         History.Insert(0, value);
         if (History.Count > 20) History.RemoveRange(20, History.Count - 20);
@@ -30,8 +34,6 @@ public interface IAppStateStore
 public sealed class JsonAppStateStore : IAppStateStore
 {
     private const long MaximumStateBytes = 1024 * 1024;
-    private static readonly HashSet<string> SupportedThemes =
-        new(["Graphite", "Midnight", "Nebula", "Daylight"], StringComparer.OrdinalIgnoreCase);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -75,7 +77,10 @@ public sealed class JsonAppStateStore : IAppStateStore
         var temporaryPath = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(state, JsonOptions));
+            var json = JsonSerializer.Serialize(state, JsonOptions);
+            if (Encoding.UTF8.GetByteCount(json) > MaximumStateBytes)
+                throw new InvalidOperationException("Application state exceeds the maximum supported size.");
+            File.WriteAllText(temporaryPath, json);
             File.Move(temporaryPath, _path, true);
         }
         finally
@@ -86,20 +91,42 @@ public sealed class JsonAppStateStore : IAppStateStore
 
     private static AppState Normalize(AppState state)
     {
-        state.Settings ??= new ScanSettings();
-        state.Settings.Validate();
+        var settings = state.Settings ?? new ScanSettings();
+        state.Settings = new ScanSettings
+        {
+            MaxOutstanding = Bounded(settings.MaxOutstanding, 1, 1024, 64),
+            TimeoutMs = Bounded(settings.TimeoutMs, 1, 120_000, 1000),
+            PingsPerNode = Bounded(settings.PingsPerNode, 1, 10, 1),
+            Ttl = Bounded(settings.Ttl, 1, 255, 128),
+            DelayMs = Bounded(settings.DelayMs, 0, 60_000, 0),
+            Payload = ValidPayload(settings.Payload),
+            ExpansionCap = Bounded(settings.ExpansionCap, 1, 1_000_000, 65_536),
+            DnsTimeoutMs = Bounded(settings.DnsTimeoutMs, 1, 30_000, 2000),
+            DontFragment = settings.DontFragment,
+            ResolveRespondingOnly = settings.ResolveRespondingOnly
+        };
         state.Title = string.IsNullOrWhiteSpace(state.Title) ? "Ping Flud" : state.Title.Trim()[..Math.Min(120, state.Title.Trim().Length)];
         state.Subtitle = (state.Subtitle ?? string.Empty).Trim();
         if (state.Subtitle.Length > 240) state.Subtitle = state.Subtitle[..240];
-        state.ThemeName = SupportedThemes.Contains(state.ThemeName ?? string.Empty)
-            ? SupportedThemes.First(theme => theme.Equals(state.ThemeName, StringComparison.OrdinalIgnoreCase))
-            : "Graphite";
+        if (state.Subtitle.Equals("Fast, transparent network reachability checks", StringComparison.OrdinalIgnoreCase))
+            state.Subtitle = AppState.DefaultSubtitle;
+        state.ThemeName = AppearanceModes.NormalizeName(state.ThemeName);
         state.History = (state.History ?? [])
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value.Trim())
+            .Where(value => Encoding.UTF8.GetByteCount(value) <= AppState.MaximumRememberedTargetBytes)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(20)
             .ToList();
         return state;
+    }
+
+    private static int Bounded(int value, int minimum, int maximum, int fallback) =>
+        value >= minimum && value <= maximum ? value : fallback;
+
+    private static string ValidPayload(string? value)
+    {
+        value ??= "Ping Flud";
+        return Encoding.UTF8.GetByteCount(value) <= 60_000 ? value : "Ping Flud";
     }
 }

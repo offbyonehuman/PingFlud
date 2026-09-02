@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -20,6 +19,7 @@ public sealed partial class MainWindow : Window
 {
     private readonly IAppStateStore _stateStore;
     private readonly AppState _state;
+    private bool _syncingResultSelection;
 
     public MainViewModel ViewModel { get; }
     public ObservableCollection<string> TargetHistory { get; }
@@ -34,14 +34,13 @@ public sealed partial class MainWindow : Window
             Settings = _state.Settings
         };
         InitializeComponent();
+        TargetsBox.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(TargetsBox_KeyDown), true);
 
         ApplyState();
         SystemBackdrop = new MicaBackdrop();
-        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         ViewModel.Results.CollectionChanged += (_, _) =>
         {
             EmptyState.Visibility = ViewModel.Results.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            Bindings.Update();
         };
         Closed += (_, _) =>
         {
@@ -74,67 +73,102 @@ public sealed partial class MainWindow : Window
         Title = _state.Title;
         TitleText.Text = _state.Title;
         SubtitleText.Text = _state.Subtitle;
-        Navigation.RequestedTheme = _state.ThemeName == "Daylight" ? ElementTheme.Light : ElementTheme.Dark;
         UpdateThemeResources();
+        var isDark = _state.ThemeName == AppearanceModes.DarkMode;
+        ThemeToggleButton.IsChecked = isDark;
+        ThemeIcon.Glyph = isDark ? "\uE708" : "\uE706";
+        var elementTheme = isDark ? ElementTheme.Dark : ElementTheme.Light;
+        RootGrid.RequestedTheme = elementTheme;
+        Navigation.RequestedTheme = elementTheme;
     }
 
     private void UpdateThemeResources()
     {
         var resources = Microsoft.UI.Xaml.Application.Current.Resources;
 
-        switch (_state.ThemeName)
-        {
-            case "Midnight":
-                ApplyMidnightTheme(resources);
-                break;
-            case "Nebula":
-                ApplyNebulaTheme(resources);
-                break;
-            case "Daylight":
-                ApplyDaylightTheme(resources);
-                break;
-            default:
-                ApplyGraphiteTheme(resources);
-                break;
-        }
+        ApplyThemeResources(resources, ToThemePalette(AppearanceModes.Get(_state.ThemeName)));
     }
 
-    private static void ApplyGraphiteTheme(ResourceDictionary resources)
+    private static ThemePalette ToThemePalette(AppearancePalette palette) => new(
+        ToColor(palette.WindowBackground),
+        ToColor(palette.Surface),
+        ToColor(palette.SurfaceRaised),
+        ToColor(palette.Border),
+        ToColor(palette.MutedForeground),
+        ToColor(palette.Header),
+        ToColor(palette.Accent),
+        ToColor(palette.AccentForeground),
+        ToColor(palette.Selection),
+        ToColor(palette.Success),
+        ToColor(palette.Danger));
+
+    private static Color ToColor(uint argb) => Color.FromArgb(
+        (byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
+
+    private static void ApplyThemeResources(ResourceDictionary resources, ThemePalette palette)
     {
-        resources["GraphiteWindowColor"] = Color.FromArgb(255, 18, 18, 18);
-        resources["GraphiteSurfaceColor"] = Color.FromArgb(255, 30, 30, 30);
-        resources["GraphiteRaisedColor"] = Color.FromArgb(255, 42, 42, 42);
-        resources["GraphiteBorderColor"] = Color.FromArgb(255, 70, 70, 70);
-        resources["GraphiteMutedColor"] = Color.FromArgb(255, 180, 180, 180);
-        resources["ApplicationPageBackgroundThemeBrush"] = new SolidColorBrush((Color)resources["GraphiteWindowColor"]);
-        resources["CardBackgroundBrush"] = new SolidColorBrush((Color)resources["GraphiteSurfaceColor"]);
-        resources["CardBorderBrush"] = new SolidColorBrush((Color)resources["GraphiteBorderColor"]);
-        resources["MutedTextBrush"] = new SolidColorBrush((Color)resources["GraphiteMutedColor"]);
+        resources["GraphiteWindowColor"] = palette.WindowBackground;
+        resources["GraphiteSurfaceColor"] = palette.Surface;
+        resources["GraphiteRaisedColor"] = palette.RaisedSurface;
+        resources["GraphiteBorderColor"] = palette.Border;
+        resources["GraphiteMutedColor"] = palette.MutedText;
+        resources["AccentColor"] = palette.Accent;
+        resources["SelectionColor"] = palette.Selection;
+        resources["AccentForegroundColor"] = palette.AccentForeground;
+        resources["AccentBrush"] = new SolidColorBrush(palette.Accent);
+        resources["SelectionBrush"] = new SolidColorBrush(palette.Selection);
+        resources["AccentForegroundBrush"] = new SolidColorBrush(palette.AccentForeground);
+        resources["ToggleButtonBackground"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBackgroundPointerOver"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBackgroundPressed"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonForeground"] = new SolidColorBrush(palette.AccentForeground);
+        resources["ToggleButtonForegroundPointerOver"] = new SolidColorBrush(palette.AccentForeground);
+        resources["ToggleButtonForegroundPressed"] = new SolidColorBrush(palette.AccentForeground);
+        resources["ToggleButtonBorderBrush"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBorderBrushPointerOver"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBorderBrushPressed"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBackgroundChecked"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBackgroundCheckedPointerOver"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBackgroundCheckedPressed"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonForegroundChecked"] = new SolidColorBrush(palette.AccentForeground);
+        resources["ToggleButtonForegroundCheckedPointerOver"] = new SolidColorBrush(palette.AccentForeground);
+        resources["ToggleButtonForegroundCheckedPressed"] = new SolidColorBrush(palette.AccentForeground);
+        resources["ToggleButtonBorderBrushChecked"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBorderBrushCheckedPointerOver"] = new SolidColorBrush(palette.Accent);
+        resources["ToggleButtonBorderBrushCheckedPressed"] = new SolidColorBrush(palette.Accent);
+        resources["SystemAccentColor"] = palette.Accent;
+        resources["NavigationViewSelectionIndicatorForeground"] = new SolidColorBrush(palette.Accent);
+        resources["NavigationViewItemBackgroundSelected"] = new SolidColorBrush(palette.Selection);
+        resources["NavigationViewItemBackgroundSelectedPointerOver"] = new SolidColorBrush(palette.Selection);
+        resources["SystemControlBackgroundAccentBrush"] = new SolidColorBrush(palette.Accent);
+        resources["SystemControlForegroundAccentBrush"] = new SolidColorBrush(palette.Accent);
+        resources["SystemControlHighlightAccentBrush"] = new SolidColorBrush(palette.Accent);
+        resources["SystemControlHighlightAltAccentBrush"] = new SolidColorBrush(palette.Accent);
+        resources["SystemControlHighlightListAccentLowBrush"] = new SolidColorBrush(palette.Selection);
+        resources["SystemControlHighlightListAccentMediumBrush"] = new SolidColorBrush(palette.Accent);
+        resources["SystemControlHighlightListAccentHighBrush"] = new SolidColorBrush(palette.Accent);
+        resources["ApplicationPageBackgroundThemeBrush"] = new SolidColorBrush(palette.WindowBackground);
+        resources["CardBackgroundBrush"] = new SolidColorBrush(palette.Surface);
+        resources["CardBorderBrush"] = new SolidColorBrush(palette.Border);
+        resources["MutedTextBrush"] = new SolidColorBrush(palette.MutedText);
+        resources["SuccessBrush"] = new SolidColorBrush(palette.Success);
+        resources["DangerBrush"] = new SolidColorBrush(palette.Danger);
+        resources["ProgressBrush"] = new SolidColorBrush(palette.Success);
+        resources["ResultsHeaderBackgroundBrush"] = new SolidColorBrush(palette.Header);
     }
 
-    private static void ApplyMidnightTheme(ResourceDictionary resources)
-    {
-        resources["ApplicationPageBackgroundThemeBrush"] = new SolidColorBrush(Color.FromArgb(255, 26, 32, 48));
-        resources["CardBackgroundBrush"] = new SolidColorBrush(Color.FromArgb(255, 35, 39, 51));
-        resources["CardBorderBrush"] = new SolidColorBrush(Color.FromArgb(255, 72, 78, 96));
-        resources["MutedTextBrush"] = new SolidColorBrush(Color.FromArgb(255, 192, 192, 192));
-    }
-
-    private static void ApplyNebulaTheme(ResourceDictionary resources)
-    {
-        resources["ApplicationPageBackgroundThemeBrush"] = new SolidColorBrush(Color.FromArgb(255, 18, 18, 18));
-        resources["CardBackgroundBrush"] = new SolidColorBrush(Color.FromArgb(255, 30, 30, 30));
-        resources["CardBorderBrush"] = new SolidColorBrush(Color.FromArgb(255, 70, 70, 70));
-        resources["MutedTextBrush"] = new SolidColorBrush(Color.FromArgb(255, 180, 180, 180));
-    }
-
-    private static void ApplyDaylightTheme(ResourceDictionary resources)
-    {
-        resources["ApplicationPageBackgroundThemeBrush"] = new SolidColorBrush(Color.FromArgb(255, 243, 243, 243));
-        resources["CardBackgroundBrush"] = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255));
-        resources["CardBorderBrush"] = new SolidColorBrush(Color.FromArgb(255, 200, 200, 200));
-        resources["MutedTextBrush"] = new SolidColorBrush(Color.FromArgb(255, 120, 120, 120));
-    }
+    private readonly record struct ThemePalette(
+        Color WindowBackground,
+        Color Surface,
+        Color RaisedSurface,
+        Color Border,
+        Color MutedText,
+        Color Header,
+        Color Accent,
+        Color AccentForeground,
+        Color Selection,
+        Color Success,
+        Color Danger);
 
     private async void StartButton_Click(object sender, RoutedEventArgs e) =>
         await StartAndPersistAsync();
@@ -183,6 +217,7 @@ public sealed partial class MainWindow : Window
         var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
         {
             XamlRoot = Content.XamlRoot,
+            RequestedTheme = Navigation.RequestedTheme,
             Title = title,
             Content = message,
             CloseButtonText = "OK"
@@ -193,16 +228,40 @@ public sealed partial class MainWindow : Window
     private async void SettingsButton_Click(object sender, RoutedEventArgs e) =>
         await ShowSettingsAsync();
 
-    private async void SettingsNavigation_Tapped(object sender, TappedRoutedEventArgs e) =>
-        await ShowSettingsAsync();
+    private void ThemeToggleButton_Checked(object sender, RoutedEventArgs e) => SetTheme(AppearanceModes.DarkMode);
 
-    private async void DocumentationNavigation_Tapped(object sender, TappedRoutedEventArgs e) =>
-        await ShowDocumentationAsync();
+    private void ThemeToggleButton_Unchecked(object sender, RoutedEventArgs e) => SetTheme(AppearanceModes.LightMode);
 
-    private async void AboutNavigation_Tapped(object sender, TappedRoutedEventArgs e) =>
-        await ShowMessageAsync(
-            "About Ping Flud",
-            "Ping Flud 1.5.2\nFast, transparent network reachability checks.\n\nCopyright © 2026 OffByOneHuman\nLicensed under MIT.");
+    private void SetTheme(string themeName)
+    {
+        if (_state.ThemeName == themeName) return;
+        _state.ThemeName = themeName;
+        ApplyState();
+        SaveStateSafely();
+    }
+
+    private async void Navigation_SelectionChanged(
+        NavigationView sender,
+        NavigationViewSelectionChangedEventArgs args)
+    {
+        if (args.SelectedItemContainer?.Tag is not string destination || destination == "Workspace") return;
+
+        sender.SelectedItem = sender.MenuItems[0];
+        switch (destination)
+        {
+            case "Settings":
+                await ShowSettingsAsync();
+                break;
+            case "Documentation":
+                await ShowDocumentationAsync();
+                break;
+            case "About":
+                await ShowMessageAsync(
+                    "About Ping Flud",
+                    "Ping Flud 1.5.2\nNetwork reachability testing and troubleshooting.\n\nCopyright © 2026 OffByOneHuman\nLicensed under MIT.");
+                break;
+        }
+    }
 
     private async void SyntaxHelpButton_Click(object sender, RoutedEventArgs e) =>
         await ShowDocumentationAsync();
@@ -226,6 +285,64 @@ public sealed partial class MainWindow : Window
         ViewModel.Settings = _state.Settings;
         ApplyState();
         SaveStateSafely();
+    }
+
+    private void ResultSelectionCheckBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox checkBox && FindVisualAncestor<ListViewItem>(checkBox) is { } item)
+            SetCheckBoxState(checkBox, item.IsSelected);
+    }
+
+    private void ResultSelectionCheckBox_Checked(object sender, RoutedEventArgs e) =>
+        SetResultSelection(sender, true);
+
+    private void ResultSelectionCheckBox_Unchecked(object sender, RoutedEventArgs e) =>
+        SetResultSelection(sender, false);
+
+    private void SetResultSelection(object sender, bool isSelected)
+    {
+        if (_syncingResultSelection || sender is not CheckBox checkBox) return;
+        if (FindVisualAncestor<ListViewItem>(checkBox) is { } item)
+            item.IsSelected = isSelected;
+    }
+
+    private void ResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        foreach (var item in e.AddedItems.Cast<object>().Concat(e.RemovedItems))
+        {
+            if (ResultsList.ContainerFromItem(item) is ListViewItem container &&
+                FindVisualDescendant<CheckBox>(container) is { } checkBox)
+                SetCheckBoxState(checkBox, ResultsList.SelectedItems.Contains(item));
+        }
+    }
+
+    private void SetCheckBoxState(CheckBox checkBox, bool isSelected)
+    {
+        if (_syncingResultSelection || checkBox.IsChecked == isSelected) return;
+        _syncingResultSelection = true;
+        checkBox.IsChecked = isSelected;
+        _syncingResultSelection = false;
+    }
+
+    private static T? FindVisualAncestor<T>(DependencyObject? element) where T : DependencyObject
+    {
+        while (element is not null)
+        {
+            if (element is T match) return match;
+            element = VisualTreeHelper.GetParent(element);
+        }
+        return null;
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject element) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(element); index++)
+        {
+            var child = VisualTreeHelper.GetChild(element, index);
+            if (child is T match) return match;
+            if (FindVisualDescendant<T>(child) is { } descendant) return descendant;
+        }
+        return null;
     }
 
     private void StopButton_Click(object sender, RoutedEventArgs e) =>
@@ -255,6 +372,7 @@ public sealed partial class MainWindow : Window
     private void CopyButton_Click(object sender, RoutedEventArgs e)
     {
         var selected = ResultsList.SelectedItems.Cast<ScanResult>().ToArray();
+        if (selected.Length == 0) selected = ViewModel.Results.ToArray();
         if (selected.Length == 0) return;
 
         var text = string.Join(Environment.NewLine, selected.Select(row =>
@@ -327,6 +445,4 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e) =>
-        Bindings.Update();
 }

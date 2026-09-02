@@ -1,3 +1,4 @@
+using PingFlud.Application;
 using PingFlud.Core;
 
 namespace PingFlud.App;
@@ -62,7 +63,7 @@ internal sealed class SettingsDialog : Form
         });
         heading.Controls.Add(new Label
         {
-            Text = "Tune ICMP behavior, safety limits, and window labels.",
+            Text = "Tune ICMP probes, DNS diagnostics, safety limits, and window labels.",
             ForeColor = _theme.MutedForeground,
             AutoSize = true,
             Location = new Point(2, 36)
@@ -74,7 +75,7 @@ internal sealed class SettingsDialog : Form
             BackColor = _theme.Surface,
             Padding = new Padding(18, 14, 18, 14),
             ColumnCount = 2,
-            RowCount = 12,
+            RowCount = 13,
             AutoScroll = false,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
@@ -107,6 +108,9 @@ internal sealed class SettingsDialog : Form
             ForeColor = _theme.Foreground,
             BackColor = _theme.Surface
         };
+        var appearanceToggle = CreateAppearanceToggle(_theme.IsDark);
+        appearanceToggle.CheckedChanged += (_, _) =>
+            appearanceToggle.Text = appearanceToggle.Checked ? "Dark mode" : "Light mode";
 
         AddField(fields, 0, "Max outstanding packets", "Concurrent probes", maxOutstanding);
         AddField(fields, 1, "Timeout", "Milliseconds per ping", timeout);
@@ -118,11 +122,12 @@ internal sealed class SettingsDialog : Form
         AddField(fields, 7, "Window title", "Shown in the title bar", title);
         AddField(fields, 8, "Subtitle", "Shown below the product name", subtitle);
         AddField(fields, 9, "DNS timeout", "Milliseconds per reverse DNS lookup", dnsTimeout);
+        AddField(fields, 10, "Appearance mode", "Switch between Light and Dark modes", appearanceToggle);
 
         // CheckBoxes span both columns
-        fields.Controls.Add(dontFragment, 0, 10);
+        fields.Controls.Add(dontFragment, 0, 11);
         fields.SetColumnSpan(dontFragment, 2);
-        fields.Controls.Add(resolveResponding, 0, 11);
+        fields.Controls.Add(resolveResponding, 0, 12);
         fields.SetColumnSpan(resolveResponding, 2);
 
         var actions = new FlowLayoutPanel
@@ -162,6 +167,7 @@ internal sealed class SettingsDialog : Form
                 _state.Settings = candidate;
                 _state.Title = string.IsNullOrWhiteSpace(title.Text) ? "Ping Flud" : title.Text.Trim();
                 _state.Subtitle = subtitle.Text.Trim();
+                _state.ThemeName = appearanceToggle.Checked ? AppearanceModes.DarkMode : AppearanceModes.LightMode;
             }
             catch (Exception ex)
             {
@@ -209,6 +215,23 @@ internal sealed class SettingsDialog : Form
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = _theme.SurfaceRaised,
         ForeColor = _theme.Foreground
+    };
+
+    private CheckBox CreateAppearanceToggle(bool isDark) => new()
+    {
+        Text = isDark ? "Dark mode" : "Light mode",
+        Checked = isDark,
+        Appearance = Appearance.Button,
+        AutoSize = false,
+        Dock = DockStyle.Fill,
+        Height = 32,
+        Margin = new Padding(4, 7, 0, 7),
+        TextAlign = ContentAlignment.MiddleCenter,
+        AccessibleName = "Appearance mode",
+        AccessibleDescription = "Switch between Light and Dark modes",
+        BackColor = _theme.SurfaceRaised,
+        ForeColor = _theme.Foreground,
+        UseVisualStyleBackColor = false
     };
 
     private Button CreateButton(string text, bool primary)

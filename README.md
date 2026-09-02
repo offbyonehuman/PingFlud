@@ -16,7 +16,7 @@
 - Search plus Responding / Not responding filters
 - CSV, HTML, PDF, PNG, and TXT exports
 - Windows 11 WinUI workspace with a left navigation rail and responsive content panels
-- Four persisted themes: Graphite (default), Midnight, Nebula, and Daylight
+- Light and dark appearance modes, with Graphite as the dark default
 - Compact runtime-dependent builds and portable self-contained builds for Windows x86, x64, and ARM64
 
 ## Quick start
@@ -97,16 +97,13 @@ Every range, CIDR, and wildcard expansion is constrained by **Expansion safety c
 
 A device can be online while blocking ICMP. “Not responding” means no ICMP response under the selected settings; it does not prove the device is powered off.
 
-## Themes
+## Appearance
 
-Choose a theme from the **Theme** menu:
+Use the **Light mode / Dark mode** toggle to change appearance. Dark mode uses
+the neutral Graphite palette; Light mode uses the Daylight palette. The choice
+is saved with the scan settings.
 
-- **Graphite** — neutral black and grey surfaces
-- **Midnight** — dark navy and slate surfaces with blue accents
-- **Nebula** — dark violet surfaces with violet accents
-- **Daylight** — light surfaces with Windows-blue accents
-
-The selected theme, scan settings, custom title/subtitle, and recent target history are stored in:
+The appearance mode, scan settings, custom title/subtitle, and recent target history are stored in:
 
 ```text
 %LOCALAPPDATA%\PingFlud\settings.json

@@ -28,10 +28,17 @@ public sealed class AsyncRelayCommand(Func<Task> execute, Func<bool>? canExecute
     public async void Execute(object? parameter)
     {
         if (!CanExecute(parameter)) return;
+        await ExecuteCoreAsync();
+    }
+
+    public Task ExecuteAsync() => CanExecute(null) ? ExecuteCoreAsync() : Task.CompletedTask;
+
+    private async Task ExecuteCoreAsync()
+    {
+        _isExecuting = true;
+        CanExecuteChanged?.Invoke(this, EventArgs.Empty);
         try
         {
-            _isExecuting = true;
-            CanExecuteChanged?.Invoke(this, EventArgs.Empty);
             await execute();
         }
         finally
@@ -40,6 +47,4 @@ public sealed class AsyncRelayCommand(Func<Task> execute, Func<bool>? canExecute
             CanExecuteChanged?.Invoke(this, EventArgs.Empty);
         }
     }
-
-    public Task ExecuteAsync() => execute();
 }

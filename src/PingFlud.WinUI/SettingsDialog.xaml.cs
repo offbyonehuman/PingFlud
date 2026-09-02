@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PingFlud.Application;
 
@@ -25,30 +26,21 @@ public sealed partial class SettingsDialog : ContentDialog
         PayloadBox.Text = draft.Payload;
         DontFragmentBox.IsChecked = draft.DontFragment;
         ResolveRespondingOnlyBox.IsChecked = draft.ResolveRespondingOnly;
-        ThemeBox.ItemsSource = new[] { "Graphite", "Midnight", "Nebula", "Daylight" };
-        ThemeBox.SelectedItem = draft.ThemeName;
-        TitleBox.Text = draft.Title;
-        SubtitleBox.Text = draft.Subtitle;
     }
 
     private void ContentDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
-        var draft = new SettingsDraft
-        {
-            MaxOutstanding = (int)MaxOutstandingBox.Value,
-            TimeoutMs = (int)TimeoutBox.Value,
-            PingsPerNode = (int)PingsBox.Value,
-            Ttl = (int)TtlBox.Value,
-            DelayMs = (int)DelayBox.Value,
-            ExpansionCap = (int)ExpansionBox.Value,
-            DnsTimeoutMs = (int)DnsTimeoutBox.Value,
-            Payload = PayloadBox.Text,
-            DontFragment = DontFragmentBox.IsChecked == true,
-            ResolveRespondingOnly = ResolveRespondingOnlyBox.IsChecked == true,
-            ThemeName = ThemeBox.SelectedItem as string ?? "Graphite",
-            Title = TitleBox.Text,
-            Subtitle = SubtitleBox.Text
-        };
+        var draft = SettingsDraft.From(_state);
+        draft.MaxOutstanding = (int)MaxOutstandingBox.Value;
+        draft.TimeoutMs = (int)TimeoutBox.Value;
+        draft.PingsPerNode = (int)PingsBox.Value;
+        draft.Ttl = (int)TtlBox.Value;
+        draft.DelayMs = (int)DelayBox.Value;
+        draft.ExpansionCap = (int)ExpansionBox.Value;
+        draft.DnsTimeoutMs = (int)DnsTimeoutBox.Value;
+        draft.Payload = PayloadBox.Text;
+        draft.DontFragment = DontFragmentBox.IsChecked == true;
+        draft.ResolveRespondingOnly = ResolveRespondingOnlyBox.IsChecked == true;
 
         if (draft.TryApply(_state, out var error))
         {

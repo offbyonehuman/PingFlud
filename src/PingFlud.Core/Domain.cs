@@ -45,6 +45,20 @@ public sealed class ScanSettings
         if (ExpansionCap is < 1 or > 1_000_000) throw new ArgumentOutOfRangeException(nameof(ExpansionCap));
         if (DnsTimeoutMs is < 1 or > 30_000) throw new ArgumentOutOfRangeException(nameof(DnsTimeoutMs));
     }
+
+    public ScanSettings Clone() => new()
+    {
+        MaxOutstanding = MaxOutstanding,
+        TimeoutMs = TimeoutMs,
+        PingsPerNode = PingsPerNode,
+        Ttl = Ttl,
+        DelayMs = DelayMs,
+        Payload = Payload,
+        ExpansionCap = ExpansionCap,
+        DnsTimeoutMs = DnsTimeoutMs,
+        DontFragment = DontFragment,
+        ResolveRespondingOnly = ResolveRespondingOnly
+    };
 }
 
 public static class ResultFilters
@@ -185,10 +199,12 @@ public sealed class PingScanner
 
     private async ValueTask<ScanResult> ProbeAsync(string target, ScanSettings settings, CancellationToken ct)
     {
+        IPAddress? resolvedAddress = null;
         try
         {
             var addresses = await _resolver.ResolveAddressesAsync(target, ct);
             if (addresses.Length == 0) throw new SocketException();
+            resolvedAddress = addresses[0];
 
             long? best = null;
             IPStatus lastStatus = IPStatus.Unknown;
@@ -234,14 +250,14 @@ public sealed class PingScanner
         catch (OperationCanceledException) { throw; }
         catch (PingException ex)
         {
-            return Failed(target, "Ping error: " + (ex.InnerException?.Message ?? ex.Message), settings.PingsPerNode);
+            return Failed(target, "Ping error: " + (ex.InnerException?.Message ?? ex.Message), settings.PingsPerNode, resolvedAddress);
         }
         catch (Exception ex) when (ex is SocketException or ArgumentException)
         {
-            return Failed(target, "Resolution failed", settings.PingsPerNode);
+            return Failed(target, "Resolution failed", settings.PingsPerNode, resolvedAddress);
         }
     }
 
-    private static ScanResult Failed(string target, string status, int attempts) =>
-        new(target, false, null, string.Empty, string.Empty, status, attempts, 0, 100, null);
+    private static ScanResult Failed(string target, string status, int attempts, IPAddress? address = null) =>
+        new(target, false, null, string.Empty, address?.ToString() ?? string.Empty, status, attempts, 0, 100, null);
 }

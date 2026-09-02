@@ -88,6 +88,23 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task ExportIsDisabledWhenFilterHidesEveryResult()
+    {
+        var model = new MainViewModel(new FakeScanRunner(
+            new ScanResult("up", true, 1, "", "127.0.0.1", "Responding", 1, 1, 0, 128)))
+        { Targets = "up" };
+        await model.StartScanAsync();
+
+        model.Search = "does-not-match";
+
+        Assert.True(model.HasResults);
+        Assert.Empty(model.Results);
+        Assert.False(model.CanCopyResults);
+        Assert.True(model.CanClearResults);
+        Assert.False(model.CanExport);
+    }
+
+    [Fact]
     public void CanExportRequiresResults()
     {
         var model = new MainViewModel(new FakeScanRunner()) { Targets = "localhost" };
@@ -141,16 +158,96 @@ public sealed class MainViewModelTests
             new ScanResult("localhost", true, 1, "", "127.0.0.1", "Responding", 1, 1, 0, 128),
             new ScanResult("localhost", true, 1, "localhost", "127.0.0.1", "Responding", 1, 1, 0, 128));
         var model = new MainViewModel(runner) { Targets = "localhost" };
+        var summaries = new List<string>();
+        model.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(MainViewModel.Summary)) summaries.Add(model.Summary);
+        };
 
         await model.StartScanAsync();
 
         var result = Assert.Single(model.Results);
         Assert.Equal("localhost", result.HostName);
+        Assert.DoesNotContain(summaries, summary => summary.Contains("2 responding", StringComparison.Ordinal));
         Assert.Equal("Scan complete", model.Status);
         Assert.Equal("1 target • 1 responding • 0 unavailable • median 1 ms", model.Summary);
         Assert.Equal(100, model.ProgressPercent);
         Assert.True(model.CanStart);
         Assert.False(model.CanStop);
+    }
+
+    [Fact]
+    public async Task ExistingResultsCannotBeChangedWhileScanning()
+    {
+        var runner = new BlockingScanRunner();
+        var model = new MainViewModel(runner)
+        {
+            Targets = "next-scan"
+        };
+        model.ApplyTestResult(new ScanResult("old", true, 1, "", "127.0.0.1", "Responding", 1, 1, 0, 128));
+
+        var scanTask = model.StartScanAsync();
+        await runner.Started.Task;
+
+        Assert.False(model.CanCopyResults);
+        Assert.False(model.CanClearResults);
+        Assert.False(model.CanExport);
+
+        runner.Release.TrySetResult();
+        await scanTask;
+    }
+
+    [Fact]
+    public async Task SmallScansPublishResultsAsTheyArrive()
+    {
+        var runner = new StreamingScanRunner(
+            new ScanResult("first", true, 1, "", "127.0.0.1", "Responding", 1, 1, 0, 128),
+            new ScanResult("second", false, 1, "", "192.0.2.1", "TimedOut", 0, 1, 100, 0));
+        var model = new MainViewModel(runner) { Targets = "first,second" };
+
+        var scanTask = model.StartScanAsync();
+        await runner.FirstReported.Task;
+
+        Assert.Single(model.Results);
+
+        runner.Release.TrySetResult();
+        await scanTask;
+    }
+
+    [Fact]
+    public async Task ScanUsesSettingsSnapshot()
+    {
+        var runner = new SettingsSnapshotRunner();
+        var settings = new ScanSettings { TimeoutMs = 1000 };
+        var model = new MainViewModel(runner)
+        {
+            Settings = settings,
+            Targets = "127.0.0.1"
+        };
+
+        var scanTask = model.StartScanAsync();
+        await runner.Started.Task;
+
+        settings.TimeoutMs = 2000;
+
+        Assert.NotNull(runner.ReceivedSettings);
+        Assert.Equal(1000, runner.ReceivedSettings.TimeoutMs);
+
+        runner.Release.TrySetResult();
+        await scanTask;
+    }
+
+    [Fact]
+    public async Task NullTargetsAreTreatedAsEmptyInput()
+    {
+        var model = new MainViewModel(new FakeScanRunner()) { Targets = null! };
+
+        Assert.Equal(string.Empty, model.Targets);
+        Assert.False(model.CanStart);
+
+        await model.StartScanAsync();
+
+        Assert.Equal("Cannot start scan", model.Status);
     }
 
     [Fact]
@@ -235,6 +332,58 @@ public sealed class MainViewModelTests
             CancellationToken cancellationToken) =>
             Task.Run(() => progress.Report(
                 new ScanResult("localhost", true, 1, "", "127.0.0.1", "Responding", 1, 1, 0, 128)), cancellationToken);
+    }
+
+    private sealed class BlockingScanRunner : IScanRunner
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task ScanAsync(
+            IReadOnlyList<string> targets,
+            ScanSettings settings,
+            IProgress<ScanResult> progress,
+            CancellationToken cancellationToken)
+        {
+            Started.SetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    private sealed class StreamingScanRunner(ScanResult first, ScanResult second) : IScanRunner
+    {
+        public TaskCompletionSource FirstReported { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task ScanAsync(
+            IReadOnlyList<string> targets,
+            ScanSettings settings,
+            IProgress<ScanResult> progress,
+            CancellationToken cancellationToken)
+        {
+            progress.Report(first);
+            FirstReported.SetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            progress.Report(second);
+        }
+    }
+
+    private sealed class SettingsSnapshotRunner : IScanRunner
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ScanSettings? ReceivedSettings { get; private set; }
+
+        public async Task ScanAsync(
+            IReadOnlyList<string> targets,
+            ScanSettings settings,
+            IProgress<ScanResult> progress,
+            CancellationToken cancellationToken)
+        {
+            ReceivedSettings = settings;
+            Started.SetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+        }
     }
 
     private sealed class FakeScanRunner(params ScanResult[] rows) : IScanRunner

@@ -80,7 +80,7 @@ public static class ExportService
         var destinationDirectory = Path.GetDirectoryName(destinationPath)!;
         var stagedFiles = Directory.EnumerateFiles(stagingDirectory).ToArray();
         var stagedNames = stagedFiles
-            .Select(Path.GetFileName)
+            .Select(static file => Path.GetFileName(file)!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var stagedFile in stagedFiles)
@@ -89,12 +89,20 @@ public static class ExportService
         if (!string.Equals(Path.GetExtension(destinationPath), ".png", StringComparison.OrdinalIgnoreCase)) return;
 
         var stem = Path.GetFileNameWithoutExtension(destinationPath);
+        RemoveStalePngPages(destinationDirectory, stem, stagedNames);
+    }
+
+    internal static void RemoveStalePngPages(
+        string destinationDirectory,
+        string stem,
+        IReadOnlySet<string> stagedNames)
+    {
         foreach (var previousPage in Directory.EnumerateFiles(destinationDirectory, $"{stem}-*.png"))
         {
             var fileName = Path.GetFileName(previousPage);
             if (stagedNames.Contains(fileName)) continue;
             var suffix = Path.GetFileNameWithoutExtension(previousPage)[(stem.Length + 1)..];
-            if (suffix.Length == 3 && int.TryParse(suffix, out var pageNumber) && pageNumber >= 2)
+            if (int.TryParse(suffix, out var pageNumber) && pageNumber >= 2)
                 File.Delete(previousPage);
         }
     }

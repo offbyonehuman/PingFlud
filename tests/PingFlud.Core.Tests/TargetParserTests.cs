@@ -16,6 +16,7 @@ public class TargetParserTests
  [Fact] public void RejectsInvalidHostnameCharacters()=>Assert.Throws<FormatException>(()=>TargetParser.Expand("host!name",100));
  [Fact] public void RejectsWildcardWithNoValidOctetMatches()=>Assert.Throws<FormatException>(()=>TargetParser.Expand("10.0.0.9??",100));
  [Fact] public void ExpansionObservesCancellation(){using var cancellation=new CancellationTokenSource();cancellation.Cancel();Assert.Throws<OperationCanceledException>(()=>TargetParser.Expand("10.*.*.*",1_000_000,cancellation.Token));}
+ [Fact] public void RejectsOversizedRawInputBeforeSplitting()=>Assert.Throws<InvalidOperationException>(()=>TargetParser.Expand(new string('a',4*1024*1024+1),100));
 }
 public class SettingsTests
 {

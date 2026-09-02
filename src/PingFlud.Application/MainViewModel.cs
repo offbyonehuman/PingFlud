@@ -68,7 +68,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _targets;
         set
         {
-            if (!SetField(ref _targets, value)) return;
+            if (!SetField(ref _targets, value ?? string.Empty)) return;
             OnPropertyChanged(nameof(CanStart));
         }
     }
@@ -100,13 +100,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(CanStart));
             OnPropertyChanged(nameof(CanStop));
             OnPropertyChanged(nameof(CanEditTargets));
+            OnPropertyChanged(nameof(CanCopyResults));
+            OnPropertyChanged(nameof(CanClearResults));
+            OnPropertyChanged(nameof(CanExport));
         }
     }
 
     public bool CanStart => !IsScanning && !string.IsNullOrWhiteSpace(Targets) && !IsExporting;
     public bool CanStop => IsScanning;
     public bool CanEditTargets => !IsScanning && !IsExporting;
-    public bool CanExport => HasResults && !IsExporting;
+    public bool CanCopyResults => HasVisibleResults && !IsScanning && !IsExporting;
+    public bool CanClearResults => HasResults && !IsScanning && !IsExporting;
+    public bool CanExport => HasVisibleResults && !IsScanning && !IsExporting;
+
+    public bool HasVisibleResults => Results.Count > 0;
 
     private ExportKind _exportKind = ExportKind.Csv;
     public ExportKind ExportKind
@@ -130,6 +137,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (!SetField(ref _isExporting, value)) return;
             OnPropertyChanged(nameof(CanStart));
             OnPropertyChanged(nameof(CanEditTargets));
+            OnPropertyChanged(nameof(CanCopyResults));
+            OnPropertyChanged(nameof(CanClearResults));
             OnPropertyChanged(nameof(CanExport));
         }
     }
@@ -153,9 +162,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
-            Settings.Validate();
+            var settings = Settings.Clone();
+            settings.Validate();
             var expanded = await Task.Run(
-                () => TargetParser.Expand(Targets, Settings.ExpansionCap, cancellationToken),
+                () => TargetParser.Expand(Targets, settings.ExpansionCap, cancellationToken),
                 cancellationToken);
 
             if (expanded.Count == 0)
@@ -169,6 +179,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Results.Clear();
             OnPropertyChanged(nameof(TotalResultCount));
             OnPropertyChanged(nameof(HasResults));
+            OnPropertyChanged(nameof(CanCopyResults));
+            OnPropertyChanged(nameof(CanClearResults));
+            OnPropertyChanged(nameof(CanExport));
             _completed = 0;
             _respondingCount = 0;
             _pendingVisibleRefreshes = 0;
@@ -178,7 +191,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             var progress = new CallbackProgress<ScanResult>(result =>
                 _dispatcher.Invoke(() => ApplyScanResult(result)));
-            await _scanner.ScanAsync(expanded, Settings, progress, cancellationToken);
+            await _scanner.ScanAsync(expanded, settings, progress, cancellationToken);
 
             ProgressPercent = 100;
             Status = "Scan complete";
@@ -233,6 +246,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Summary = "0 targets";
         OnPropertyChanged(nameof(TotalResultCount));
         OnPropertyChanged(nameof(HasResults));
+        OnPropertyChanged(nameof(CanCopyResults));
+        OnPropertyChanged(nameof(CanClearResults));
+        OnPropertyChanged(nameof(CanExport));
         return true;
     }
 
@@ -240,7 +256,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task ExecuteExportAsync()
     {
-        if (!HasResults || IsExporting) return;
+        if (!CanExport) return;
 
         IsExporting = true;
         _exportCancellation = new CancellationTokenSource();
@@ -281,18 +297,25 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         if (existingIndex >= 0)
         {
+            var previous = _allResults[existingIndex];
             _allResults[existingIndex] = result;
+            if (previous.Responding != result.Responding)
+                _respondingCount += result.Responding ? 1 : -1;
         }
         else
         {
             _allResults.Add(result);
             _completed++;
+            if (result.Responding) _respondingCount++;
             OnPropertyChanged(nameof(TotalResultCount));
             OnPropertyChanged(nameof(HasResults));
+            OnPropertyChanged(nameof(CanCopyResults));
+            OnPropertyChanged(nameof(CanClearResults));
+            OnPropertyChanged(nameof(CanExport));
         }
 
-        if (result.Responding) _respondingCount++;
-        if (++_pendingVisibleRefreshes >= 100) FlushVisibleResults();
+        _pendingVisibleRefreshes++;
+        if (_total < 100 || _pendingVisibleRefreshes >= 100) FlushVisibleResults();
         ProgressPercent = _total == 0 ? 0 : (int)Math.Round(100d * _completed / _total);
         Summary = $"{_completed:N0} of {_total:N0} complete • {_respondingCount:N0} responding";
     }
@@ -312,6 +335,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         Results.Clear();
         foreach (var row in visible) Results.Add(row);
+        OnPropertyChanged(nameof(HasVisibleResults));
+        OnPropertyChanged(nameof(CanCopyResults));
+        OnPropertyChanged(nameof(CanExport));
     }
 
     private int CompareResults(ScanResult left, ScanResult right) => SortProperty switch

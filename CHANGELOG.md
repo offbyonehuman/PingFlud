@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replaced legacy theme choices with a Light/Dark toggle; Graphite remains the dark default.
+- Tightened the workspace wording around reachability testing, latency, packet loss, TTL, and reverse DNS troubleshooting.
+
 ## 1.5.2 - 2026-08-30
 
 - Batched streamed result-grid refreshes so large scans do not rebuild the full visible collection for every reply.

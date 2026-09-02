@@ -14,7 +14,7 @@ public sealed class AppState
     public ScanSettings Settings { get; set; } = new();
     public List<string> History { get; set; } = [];
     public string Title { get; set; } = "Ping Flud";
-    public string Subtitle { get; set; } = "Fast, transparent network reachability checks";
+    public string Subtitle { get; set; } = PingFlud.Application.AppState.DefaultSubtitle;
     public string ThemeName { get; set; } = "Graphite";
 }
 
@@ -71,6 +71,7 @@ public sealed class MainForm : Form
     private TableLayoutPanel _root = null!;
     private Panel _sidebar = null!;
     private MenuStrip _menu = null!;
+    private ToolStripMenuItem? _appearanceToggle;
     private Panel _header = null!;
     private Panel _resultsToolbar = null!;
     private CardPanel _scanCard = null!;
@@ -208,9 +209,16 @@ public sealed class MainForm : Form
         edit.DropDownItems.Add(new ToolStripSeparator());
         edit.DropDownItems.Add("Scan settings…", null, (_, _) => ShowSettings());
 
-        var view = new ToolStripMenuItem("Theme");
-        foreach (var theme in ThemeCatalog.All)
-            view.DropDownItems.Add(theme.Name, null, (_, _) => SelectTheme(theme.Name));
+        var view = new ToolStripMenuItem("Appearance");
+        var appearanceToggle = new ToolStripMenuItem("Dark mode")
+        {
+            CheckOnClick = true,
+            Checked = _theme.IsDark,
+            ToolTipText = "Switch between Light and Dark modes"
+        };
+        appearanceToggle.Click += (_, _) => SelectTheme(appearanceToggle.Checked ? "Graphite" : "Daylight");
+        _appearanceToggle = appearanceToggle;
+        view.DropDownItems.Add(appearanceToggle);
 
         var help = new ToolStripMenuItem("Help");
         help.DropDownItems.Add("Target syntax and legend", null, (_, _) => ShowDocumentation());
@@ -314,7 +322,7 @@ public sealed class MainForm : Form
         scanHeading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         var scanTitle = TrackLabel("New scan", new Font("Segoe UI Semibold Variable", 12F));
         scanTitle.Anchor = AnchorStyles.Left;
-        var importHint = TrackLabel("Enter a host, IP address, range, or CIDR block", new Font("Segoe UI Variable", 8.5F), true);
+        var importHint = TrackLabel("Test hosts, IPs, ranges, or CIDR blocks", new Font("Segoe UI Variable", 8.5F), true);
         scanHeading.Controls.Add(scanTitle, 0, 0);
         scanHeading.Controls.Add(importHint, 1, 0);
         layout.Controls.Add(scanHeading, 0, 0);
@@ -429,9 +437,9 @@ public sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
-        _emptyStateTitle = TrackLabel("No scan results yet", new Font("Segoe UI Semibold Variable", 14F));
+        _emptyStateTitle = TrackLabel("No reachability results yet", new Font("Segoe UI Semibold Variable", 14F));
         _emptyStateTitle.Anchor = AnchorStyles.None;
-        _emptyStateDetail = TrackLabel("Enter a host, IP address, range, or CIDR block to begin.", new Font("Segoe UI Variable", 9.5F), true);
+        _emptyStateDetail = TrackLabel("Enter targets above to test latency, packet loss, TTL, and reverse DNS.", new Font("Segoe UI Variable", 9.5F), true);
         _emptyStateDetail.Anchor = AnchorStyles.None;
         _emptyStateDetail.Margin = new Padding(0, 8, 0, 0);
         layout.Controls.Add(_emptyStateTitle, 0, 1);
@@ -451,11 +459,7 @@ public sealed class MainForm : Form
 
         AddTextColumn("State", "STATE", nameof(ScanResult.Status), 72);
         AddTextColumn("Target", "TARGET", nameof(ScanResult.Target), 120);
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn
-        {
-            Name = "Up", HeaderText = "UP", DataPropertyName = nameof(ScanResult.Responding), FillWeight = 36,
-            SortMode = DataGridViewColumnSortMode.Programmatic
-        });
+        AddTextColumn("Up", "UP", nameof(ScanResult.Responding), 36);
         AddTextColumn("Latency", "LATENCY", nameof(ScanResult.RoundtripMs), 58);
         AddTextColumn("Loss", "LOSS %", nameof(ScanResult.PacketLossPercent), 48);
         AddTextColumn("Replies", "REPLIES", nameof(ScanResult.Successes), 46);
@@ -468,10 +472,18 @@ public sealed class MainForm : Form
         _grid.Columns["Address"].HeaderCell.SortGlyphDirection = SortOrder.Ascending;
         _grid.CellFormatting += (_, e) =>
         {
-            if (e.RowIndex >= 0 && _grid.Rows[e.RowIndex].DataBoundItem is ScanResult result && e.ColumnIndex == 0)
+            if (e.RowIndex >= 0 && _grid.Rows[e.RowIndex].DataBoundItem is ScanResult result)
             {
-                e.Value = result.Responding ? "● Responding" : "○ " + result.Status;
-                e.CellStyle!.ForeColor = result.Responding ? _theme.Success : _theme.Danger;
+                if (e.ColumnIndex == 0)
+                {
+                    e.Value = result.Responding ? "● Responding" : "○ " + result.Status;
+                    e.CellStyle!.ForeColor = result.Responding ? _theme.Success : _theme.Danger;
+                }
+                else if (e.ColumnIndex == _grid.Columns["Up"].Index)
+                {
+                    e.Value = result.Responding ? "True" : "False";
+                    e.CellStyle!.ForeColor = result.Responding ? _theme.Success : _theme.Danger;
+                }
             }
         };
         _grid.ColumnHeaderMouseClick += (_, e) =>
@@ -615,10 +627,10 @@ public sealed class MainForm : Form
         var hasResults = _allResults.Count > 0;
         _emptyState.Visible = visibleCount == 0;
         _grid.Visible = visibleCount > 0;
-        _emptyStateTitle.Text = hasResults ? "No matching results" : "No scan results yet";
+        _emptyStateTitle.Text = hasResults ? "No matching results" : "No reachability results yet";
         _emptyStateDetail.Text = hasResults
             ? "Adjust the filter or search text to show matching scan results."
-            : "Enter a host, IP address, range, or CIDR block to begin.";
+            : "Enter targets above to test latency, packet loss, TTL, and reverse DNS.";
         foreach (var action in _resultActions) action.Enabled = hasResults;
         ApplyButtonStyles();
 
@@ -708,6 +720,8 @@ public sealed class MainForm : Form
     {
         using var dialog = new SettingsDialog(_state, _theme);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        _theme = ThemeCatalog.Get(_state.ThemeName);
+        ApplyTheme();
         ApplyBrand();
         SaveState();
     }
@@ -741,6 +755,8 @@ public sealed class MainForm : Form
             loaded.ThemeName = ThemeCatalog.Get(loaded.ThemeName).Name;
             loaded.Title = NormalizeLabel(loaded.Title, "Ping Flud", 120);
             loaded.Subtitle = NormalizeLabel(loaded.Subtitle, string.Empty, 240);
+            if (loaded.Subtitle.Equals("Fast, transparent network reachability checks", StringComparison.OrdinalIgnoreCase))
+                loaded.Subtitle = PingFlud.Application.AppState.DefaultSubtitle;
             loaded.History = loaded.History.Where(item => !string.IsNullOrWhiteSpace(item))
                 .Select(item => item.Trim()).Where(item => item.Length <= 16_384)
                 .Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList();
@@ -1100,11 +1116,17 @@ public sealed class MainForm : Form
         _menu.BackColor = _theme.Header;
         _menu.ForeColor = _theme.Foreground;
         _menu.Renderer = new ToolStripProfessionalRenderer(new ThemeColorTable(_theme));
+        if (_appearanceToggle is not null)
+        {
+            _appearanceToggle.Checked = _theme.IsDark;
+            _appearanceToggle.Text = _theme.IsDark ? "Dark mode" : "Light mode";
+        }
         ApplyToolStripColors(_menu.Items);
         _statusStrip.BackColor = _theme.Header;
         _statusStrip.ForeColor = _theme.Foreground;
         _status.ForeColor = _theme.Foreground;
         _summary.ForeColor = _theme.MutedForeground;
+        _progress.ForeColor = _theme.Success;
 
         _grid.BackgroundColor = _theme.Surface;
         _grid.GridColor = _theme.Border;
@@ -1113,14 +1135,15 @@ public sealed class MainForm : Form
         _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = _theme.SurfaceRaised, ForeColor = _theme.Foreground,
-            Font = new Font("Segoe UI Semibold Variable", 8.5F), SelectionBackColor = _theme.SurfaceRaised,
-            SelectionForeColor = _theme.Foreground, Alignment = DataGridViewContentAlignment.MiddleLeft
+            Font = new Font("Segoe UI Semibold Variable", 8.5F, FontStyle.Bold), SelectionBackColor = _theme.SurfaceRaised,
+            SelectionForeColor = _theme.Foreground, Alignment = DataGridViewContentAlignment.MiddleCenter
         };
         _grid.DefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = _theme.Surface, ForeColor = _theme.Foreground,
             SelectionBackColor = _theme.Selection, SelectionForeColor = _theme.Foreground,
-            Padding = new Padding(3, 2, 3, 6), Alignment = DataGridViewContentAlignment.MiddleLeft
+            Font = new Font("Segoe UI Variable", 9.5F, FontStyle.Bold),
+            Padding = new Padding(3, 2, 3, 6), Alignment = DataGridViewContentAlignment.MiddleCenter
         };
         _grid.AlternatingRowsDefaultCellStyle.BackColor = _theme.GridAlternate;
         _grid.RowTemplate.Height = 32; // Windows 11 touch-friendly height

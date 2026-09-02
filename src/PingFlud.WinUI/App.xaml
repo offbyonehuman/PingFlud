@@ -13,10 +13,55 @@
             <Color x:Key="GraphiteRaisedColor">#2A2A2A</Color>
             <Color x:Key="GraphiteBorderColor">#464646</Color>
             <Color x:Key="GraphiteMutedColor">#B4B4B4</Color>
+            <Color x:Key="AccentColor">#F59E0B</Color>
+            <Color x:Key="SelectionColor">#5A3A14</Color>
+            <Color x:Key="AccentForegroundColor">#121212</Color>
+            <x:Boolean x:Key="ListViewItemSelectionCheckMarkVisualEnabled">False</x:Boolean>
+            <SolidColorBrush x:Key="ResultCheckboxUncheckedBrush" Color="{ThemeResource GraphiteSurfaceColor}" />
+            <SolidColorBrush x:Key="ResultCheckboxUncheckedBorderBrush" Color="{ThemeResource GraphiteMutedColor}" />
+            <SolidColorBrush x:Key="ResultCheckboxCheckedBrush" Color="{ThemeResource AccentColor}" />
+            <SolidColorBrush x:Key="ResultCheckboxCheckedBorderBrush" Color="{ThemeResource AccentColor}" />
+            <SolidColorBrush x:Key="ResultCheckboxCheckMarkBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeChecked" Color="{ThemeResource AccentColor}" />
+            <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" Color="{ThemeResource AccentColor}" />
+            <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" Color="{ThemeResource AccentColor}" />
+            <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="{ThemeResource AccentColor}" />
+            <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="{ThemeResource AccentColor}" />
+            <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="{ThemeResource AccentColor}" />
+            <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="{ThemeResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="{ThemeResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="{ThemeResource AccentForegroundColor}" />
+            <Color x:Key="GraphiteSuccessColor">#56CD89</Color>
+            <Color x:Key="GraphiteDangerColor">#FF919B</Color>
             <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="{StaticResource GraphiteWindowColor}" />
             <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource GraphiteSurfaceColor}" />
             <SolidColorBrush x:Key="CardBorderBrush" Color="{StaticResource GraphiteBorderColor}" />
             <SolidColorBrush x:Key="MutedTextBrush" Color="{StaticResource GraphiteMutedColor}" />
+            <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
+            <SolidColorBrush x:Key="AccentForegroundBrush" Color="{StaticResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackground" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundPointerOver" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundPressed" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForeground" Color="{StaticResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundPointerOver" Color="{StaticResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundPressed" Color="{StaticResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrush" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushPointerOver" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="{StaticResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="{StaticResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="{StaticResource AccentForegroundColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushChecked" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPointerOver" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPressed" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource GraphiteSuccessColor}" />
+            <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource GraphiteDangerColor}" />
+            <SolidColorBrush x:Key="ProgressBrush" Color="{StaticResource GraphiteSuccessColor}" />
+            <SolidColorBrush x:Key="ResultsHeaderBackgroundBrush" Color="#171717" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 namespace PingFlud.Core;
 
 public static class TargetParser
 {
+    private const int MaximumInputBytes = 4 * 1024 * 1024;
+
     public static IReadOnlyList<string> Expand(
         string input,
         int cap = 65_536,
@@ -12,6 +15,8 @@ public static class TargetParser
     {
         if (string.IsNullOrWhiteSpace(input)) throw new FormatException("Enter at least one target.");
         if (cap < 1) throw new ArgumentOutOfRangeException(nameof(cap));
+        if (Encoding.UTF8.GetByteCount(input) > MaximumInputBytes)
+            throw new InvalidOperationException("Target input exceeds the 4 MiB safety limit.");
 
         var result = new List<string>();
         foreach (var raw in input.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))

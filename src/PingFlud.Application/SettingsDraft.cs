@@ -16,7 +16,13 @@ public sealed class SettingsDraft
     public bool ResolveRespondingOnly { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Subtitle { get; set; } = string.Empty;
-    public string ThemeName { get; set; } = "Graphite";
+    public string ThemeName { get; set; } = AppearanceModes.DarkMode;
+
+    public bool IsDarkMode
+    {
+        get => ThemeName == AppearanceModes.DarkMode;
+        set => ThemeName = value ? AppearanceModes.DarkMode : AppearanceModes.LightMode;
+    }
 
     public static SettingsDraft From(AppState state)
     {
@@ -49,7 +55,7 @@ public sealed class SettingsDraft
             var subtitle = (Subtitle ?? string.Empty).Trim();
             if (title.Length > 120) throw new ArgumentOutOfRangeException(nameof(Title), "Window title exceeds 120 characters.");
             if (subtitle.Length > 240) throw new ArgumentOutOfRangeException(nameof(Subtitle), "Subtitle exceeds 240 characters.");
-            if (ThemeName is not ("Graphite" or "Midnight" or "Nebula" or "Daylight"))
+            if (ThemeName is not (AppearanceModes.DarkMode or AppearanceModes.LightMode))
                 throw new ArgumentOutOfRangeException(nameof(ThemeName), "Unsupported theme.");
 
             var candidate = new ScanSettings
