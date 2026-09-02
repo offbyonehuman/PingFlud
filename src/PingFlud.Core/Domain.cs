@@ -66,18 +66,39 @@ public static class ResultFilters
     public static IEnumerable<ScanResult> Apply(IEnumerable<ScanResult> rows, ResultFilter filter, string search) =>
         rows.Where(r =>
             (filter == ResultFilter.All || r.Responding == (filter == ResultFilter.Responding)) &&
-            (string.IsNullOrWhiteSpace(search) ||
-             string.Join(' ', r.Target, r.HostName, r.Address, r.Status)
-                 .Contains(search, StringComparison.OrdinalIgnoreCase)));
+            (string.IsNullOrWhiteSpace(search) || MatchesSearch(r, search)));
+
+    private static bool MatchesSearch(ScanResult row, string search)
+    {
+        if (row.Target.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            row.HostName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            row.Address.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            row.Status.Contains(search, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Preserve the old cross-column search behavior for queries containing spaces
+        // without allocating a joined string for every ordinary single-term search.
+        return search.Any(char.IsWhiteSpace) &&
+               string.Join(' ', row.Target, row.HostName, row.Address, row.Status)
+                   .Contains(search, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 public static class ExportFormatting
 {
-    public static string Csv(string? value)
+    public static string NeutralizeSpreadsheetFormula(string? value)
     {
         value ??= string.Empty;
+        var content = value.TrimStart('\uFEFF').TrimStart();
+        return content.Length > 0 && content[0] is '=' or '+' or '-' or '@'
+            ? "'" + value
+            : value;
+    }
+
+    public static string Csv(string? value)
+    {
         // Prevent spreadsheet applications from interpreting untrusted cells as formulas.
-        if (value.Length > 0 && value[0] is '=' or '+' or '-' or '@') value = "'" + value;
+        value = NeutralizeSpreadsheetFormula(value);
         return value.IndexOfAny([',', '"', '\r', '\n']) >= 0
             ? $"\"{value.Replace("\"", "\"\"")}\""
             : value;
@@ -155,23 +176,26 @@ public sealed class PingScanner
         IProgress<ScanResult>? progress,
         CancellationToken cancellationToken)
     {
-        settings.Validate();
+        ArgumentNullException.ThrowIfNull(targets);
+        ArgumentNullException.ThrowIfNull(settings);
+        var scanSettings = settings.Clone();
+        scanSettings.Validate();
         var scanOptions = new ParallelOptions
         {
-            MaxDegreeOfParallelism = settings.MaxOutstanding,
+            MaxDegreeOfParallelism = scanSettings.MaxOutstanding,
             CancellationToken = cancellationToken
         };
         var results = new ConcurrentBag<ScanResult>();
 
         await Parallel.ForEachAsync(targets, scanOptions, async (target, ct) =>
         {
-            var result = await ProbeAsync(target, settings, ct);
+            var result = await ProbeAsync(target, scanSettings, ct);
             results.Add(result);
             progress?.Report(result);
         });
 
         // Phase 2: Reverse DNS
-        var dnsTargets = settings.ResolveRespondingOnly
+        var dnsTargets = scanSettings.ResolveRespondingOnly
             ? results.Where(r => r.Responding && r.Address.Length > 0)
             : results.Where(r => r.Address.Length > 0 || IPAddress.TryParse(r.Target, out _));
 
@@ -179,7 +203,7 @@ public sealed class PingScanner
 
         var dnsOptions = new ParallelOptions
         {
-            MaxDegreeOfParallelism = Math.Min(32, settings.MaxOutstanding),
+            MaxDegreeOfParallelism = Math.Min(32, scanSettings.MaxOutstanding),
             CancellationToken = cancellationToken
         };
         await Parallel.ForEachAsync(dnsTargets, dnsOptions, async (result, ct) =>
@@ -187,7 +211,7 @@ public sealed class PingScanner
             try
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                linked.CancelAfter(settings.DnsTimeoutMs);
+                linked.CancelAfter(scanSettings.DnsTimeoutMs);
                 var entry = await _resolver.GetHostEntryAsync(IPAddress.Parse(result.Address), linked.Token);
                 if (!string.IsNullOrWhiteSpace(entry.HostName))
                     progress?.Report(result with { HostName = entry.HostName });

@@ -81,9 +81,23 @@ public static class CsvReport
     public static string Create(IEnumerable<ScanResult> rows)
     {
         var output = new StringBuilder();
-        output.Append("Target,Responding,LatencyMs,PacketLossPercent,Successes,Attempts,ReplyTtl,Address,HostName,Status\r\n");
+        using var writer = new StringWriter(output, CultureInfo.InvariantCulture);
+        Write(writer, rows);
+        return output.ToString();
+    }
+
+    public static void Write(
+        TextWriter writer,
+        IEnumerable<ScanResult> rows,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(rows);
+
+        writer.Write("Target,Responding,LatencyMs,PacketLossPercent,Successes,Attempts,ReplyTtl,Address,HostName,Status\r\n");
         foreach (var row in rows)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var cells = new[]
             {
                 row.Target,
@@ -97,9 +111,8 @@ public static class CsvReport
                 row.HostName,
                 row.Status
             };
-            output.AppendJoin(',', cells.Select(ExportFormatting.Csv));
-            output.Append("\r\n");
+            writer.Write(string.Join(',', cells.Select(ExportFormatting.Csv)));
+            writer.Write("\r\n");
         }
-        return output.ToString();
     }
 }

@@ -203,10 +203,10 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            ViewModel.Targets = new TargetListImporter().Import(file.Path);
+            ViewModel.Targets = await new TargetListImporter().ImportAsync(file.Path);
             TargetsBox.Focus(FocusState.Programmatic);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
             await ShowMessageAsync("Import failed", ex.Message);
         }
@@ -427,7 +427,7 @@ public sealed partial class MainWindow : Window
             if (ViewModel.Status == "Export complete")
                 await ShowMessageAsync("Export complete", $"Results written to {file.Path}");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
             await ShowMessageAsync("Export failed", ex.Message);
         }

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Collections.Specialized;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using PingFlud.Core;
@@ -11,6 +12,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IScanRunner _scanner;
     private readonly IUiDispatcher _dispatcher;
     private readonly List<ScanResult> _allResults = [];
+    private readonly Dictionary<string, int> _resultIndexes = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _scanCancellation;
     private string _targets = string.Empty;
     private string _status = "Ready";
@@ -21,6 +23,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private int _total;
     private int _respondingCount;
     private int _pendingVisibleRefreshes;
+    private DateTime _nextVisibleRefreshUtc = DateTime.MinValue;
     private ResultFilter _filter;
     private string _search = string.Empty;
     private string _sortProperty = nameof(ScanResult.Address);
@@ -34,7 +37,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public ObservableCollection<ScanResult> Results { get; } = [];
+    private readonly ResettableObservableCollection<ScanResult> _visibleResults = [];
+    public ObservableCollection<ScanResult> Results => _visibleResults;
 
     public int TotalResultCount => _allResults.Count;
     public bool HasResults => TotalResultCount > 0;
@@ -176,6 +180,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             }
 
             _allResults.Clear();
+            _resultIndexes.Clear();
             Results.Clear();
             OnPropertyChanged(nameof(TotalResultCount));
             OnPropertyChanged(nameof(HasResults));
@@ -185,6 +190,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _completed = 0;
             _respondingCount = 0;
             _pendingVisibleRefreshes = 0;
+            _nextVisibleRefreshUtc = DateTime.MinValue;
             _total = expanded.Count;
             Summary = $"0 of {_total:N0} complete";
             Status = "Scanning…";
@@ -236,11 +242,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (IsScanning) return false;
 
         _allResults.Clear();
+        _resultIndexes.Clear();
         Results.Clear();
         _completed = 0;
         _total = 0;
         _respondingCount = 0;
         _pendingVisibleRefreshes = 0;
+        _nextVisibleRefreshUtc = DateTime.MinValue;
         ProgressPercent = 0;
         Status = "Ready";
         Summary = "0 targets";
@@ -274,6 +282,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             Status = "Export cancelled";
         }
+        catch (Exception ex) when (
+            ex is IOException or
+            UnauthorizedAccessException or
+            ArgumentException or
+            InvalidOperationException or
+            PlatformNotSupportedException or
+            System.Runtime.InteropServices.ExternalException)
+        {
+            Status = "Export failed";
+            Summary = ex.Message;
+        }
         finally
         {
             IsExporting = false;
@@ -292,10 +311,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void ApplyScanResult(ScanResult result)
     {
-        var existingIndex = _allResults.FindIndex(existing =>
-            existing.Target == result.Target && existing.Address == result.Address);
+        var key = ResultKey(result);
 
-        if (existingIndex >= 0)
+        if (_resultIndexes.TryGetValue(key, out var existingIndex))
         {
             var previous = _allResults[existingIndex];
             _allResults[existingIndex] = result;
@@ -304,6 +322,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         else
         {
+            _resultIndexes[key] = _allResults.Count;
             _allResults.Add(result);
             _completed++;
             if (result.Responding) _respondingCount++;
@@ -315,8 +334,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
 
         _pendingVisibleRefreshes++;
-        if (_total < 100 || _pendingVisibleRefreshes >= 100) FlushVisibleResults();
-        ProgressPercent = _total == 0 ? 0 : (int)Math.Round(100d * _completed / _total);
+        if (_total < 100 ||
+            (_pendingVisibleRefreshes >= 100 && DateTime.UtcNow >= _nextVisibleRefreshUtc))
+        {
+            FlushVisibleResults();
+            _nextVisibleRefreshUtc = DateTime.UtcNow.AddMilliseconds(250);
+        }
+        ProgressPercent = _total == 0
+            ? 0
+            : _completed >= _total
+                ? 100
+                : Math.Min(99, (int)Math.Round(100d * _completed / _total));
         Summary = $"{_completed:N0} of {_total:N0} complete • {_respondingCount:N0} responding";
     }
 
@@ -333,8 +361,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         visible.Sort(CompareResults);
         if (!SortAscending) visible.Reverse();
 
-        Results.Clear();
-        foreach (var row in visible) Results.Add(row);
+        _visibleResults.ReplaceAll(visible);
         OnPropertyChanged(nameof(HasVisibleResults));
         OnPropertyChanged(nameof(CanCopyResults));
         OnPropertyChanged(nameof(CanExport));
@@ -380,6 +407,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
+    private static string ResultKey(ScanResult result) =>
+        $"{result.Target.Length}:{result.Target}\0{result.Address}";
+
     public void Dispose()
     {
         _scanCancellation?.Cancel();
@@ -393,5 +423,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
     {
         public void Report(T value) => callback(value);
+    }
+
+    private sealed class ResettableObservableCollection<T> : ObservableCollection<T>
+    {
+        public void ReplaceAll(IEnumerable<T> values)
+        {
+            CheckReentrancy();
+            Items.Clear();
+            foreach (var value in values) Items.Add(value);
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+            OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
     }
 }

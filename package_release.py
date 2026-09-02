@@ -4,6 +4,7 @@ import hashlib
 import json
 import shutil
 import struct
+import subprocess
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -86,27 +87,16 @@ for flavor, artifact_root in FLAVORS.items():
         )
 
 source_archive = RELEASE / f"PingFlud-{VERSION}-source.zip"
-source_roots = [
-    ROOT / ".gitignore",
-    ROOT / "README.md",
-    ROOT / "CHANGELOG.md",
-    ROOT / "SECURITY.md",
-    ROOT / "LICENSE",
-    ROOT / "THIRD_PARTY_NOTICES.md",
-    ROOT / "PingFlud.sln",
-    ROOT / "build-all.cmd",
-    ROOT / "build-all.ps1",
-    ROOT / "package_release.py",
-]
-source_roots += [
-    path
-    for base in (ROOT / ".github", ROOT / "src", ROOT / "tests", ROOT / "third_party")
-    for path in base.rglob("*")
-    if path.is_file() and "bin" not in path.parts and "obj" not in path.parts
-]
+tracked_paths = subprocess.check_output(
+    ["git", "-C", str(ROOT), "ls-files", "-z"]
+).split(b"\0")
 with zipfile.ZipFile(source_archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as output:
-    for path in sorted(source_roots):
-        output.write(path, path.relative_to(ROOT).as_posix())
+    for raw_path in sorted(path for path in tracked_paths if path):
+        relative_path = Path(raw_path.decode("utf-8"))
+        path = ROOT / relative_path
+        if not path.is_file():
+            raise RuntimeError(f"Tracked source file is missing: {relative_path}")
+        output.write(path, relative_path.as_posix())
 source_sha256 = hashlib.sha256(source_archive.read_bytes()).hexdigest()
 
 manifest = {
