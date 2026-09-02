@@ -60,7 +60,7 @@ jobs:
               $vulnerable = foreach ($projectReport in @($report.projects)) {
                 foreach ($frameworkReport in @($projectReport.frameworks)) {
                   foreach ($package in @($frameworkReport.topLevelPackages) + @($frameworkReport.transitivePackages)) {
-                    if (@($package.vulnerabilities).Count -gt 0) { $package }
+                    if ($null -ne $package.vulnerabilities -and @($package.vulnerabilities).Count -gt 0) { $package }
                   }
                 }
               }
