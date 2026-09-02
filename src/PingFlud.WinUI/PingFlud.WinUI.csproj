@@ -13,9 +13,9 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
     <SelfContained>false</SelfContained>
-    <Version>1.5.2</Version>
-    <AssemblyVersion>1.5.2.0</AssemblyVersion>
-    <FileVersion>1.5.2.0</FileVersion>
+    <Version>1.5.3</Version>
+    <AssemblyVersion>1.5.3.0</AssemblyVersion>
+    <FileVersion>1.5.3.0</FileVersion>
     <Authors>OffByOneHuman</Authors>
     <Company>OffByOneHuman</Company>
     <Product>Ping Flud</Product>

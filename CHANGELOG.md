@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+## 1.5.3 - 2026-09-02
+
 - Replaced legacy theme choices with a Light/Dark toggle; Graphite remains the dark default.
 - Tightened the workspace wording around reachability testing, latency, packet loss, TTL, and reverse DNS troubleshooting.
+- Replaced the framework multi-select checkbox layer with a single accessible result-selection checkbox, fixing duplicate marks and preserving independent row selection.
+- Published compact and portable WinUI packages for Windows x86, x64, and ARM64 with architecture-specific checksums.
 
 ## 1.5.2 - 2026-08-30
 
