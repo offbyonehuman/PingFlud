@@ -61,4 +61,24 @@ public sealed class SettingsDraftTests
 
         Assert.Equal(expectedTheme, draft.ThemeName);
     }
+
+    [Theory]
+    [InlineData(1d, 1, 10, true, 1)]
+    [InlineData(10d, 1, 10, true, 10)]
+    [InlineData(1.5d, 1, 10, false, 0)]
+    [InlineData(double.NaN, 1, 10, false, 0)]
+    [InlineData(double.PositiveInfinity, 1, 10, false, 0)]
+    [InlineData(0d, 1, 10, false, 0)]
+    public void IntegerInputValidationRejectsNonFiniteFractionalAndOutOfRangeValues(
+        double input,
+        int minimum,
+        int maximum,
+        bool expected,
+        int expectedValue)
+    {
+        var actual = SettingsDraft.TryConvertInteger(input, minimum, maximum, out var value);
+
+        Assert.Equal(expected, actual);
+        Assert.Equal(expectedValue, value);
+    }
 }

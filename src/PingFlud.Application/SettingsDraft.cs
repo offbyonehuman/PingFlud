@@ -46,6 +46,25 @@ public sealed class SettingsDraft
         };
     }
 
+    public static bool TryConvertInteger(
+        double value,
+        int minimum,
+        int maximum,
+        out int integer)
+    {
+        if (!double.IsFinite(value) ||
+            value != Math.Truncate(value) ||
+            value < minimum ||
+            value > maximum)
+        {
+            integer = default;
+            return false;
+        }
+
+        integer = (int)value;
+        return true;
+    }
+
     public bool TryApply(AppState state, out string error)
     {
         ArgumentNullException.ThrowIfNull(state);
