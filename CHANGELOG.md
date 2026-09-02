@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.5.4 - 2026-09-02
+
+- Hardened wildcard parsing and bounded target-list importing against excessive input and memory use.
+- Neutralized spreadsheet formula prefixes in CSV and spreadsheet-compatible HTML exports.
+- Made report publication transactional with rollback protection and indexed large result updates.
+- Added scanner settings snapshots, observable async-command failures, transitive NuGet auditing, and reproducible release packaging.
+
 ## 1.5.3 - 2026-09-02
 
 - Replaced legacy theme choices with a Light/Dark toggle; Graphite remains the dark default.

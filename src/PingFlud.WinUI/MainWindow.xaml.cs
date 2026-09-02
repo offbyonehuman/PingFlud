@@ -258,7 +258,7 @@ public sealed partial class MainWindow : Window
             case "About":
                 await ShowMessageAsync(
                     "About Ping Flud",
-                    "Ping Flud 1.5.3\nNetwork reachability testing and troubleshooting.\n\nCopyright © 2026 OffByOneHuman\nLicensed under MIT.");
+                    "Ping Flud 1.5.4\nNetwork reachability testing and troubleshooting.\n\nCopyright © 2026 OffByOneHuman\nLicensed under MIT.");
                 break;
         }
     }

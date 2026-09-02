@@ -44,7 +44,7 @@
                             <TextBlock x:Name="TitleText" Text="Ping Flud" Style="{StaticResource TitleTextBlockStyle}" />
                             <TextBlock x:Name="SubtitleText" Text="Network reachability testing and troubleshooting" Foreground="{ThemeResource MutedTextBrush}" />
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="Version 1.5.3  •  OffByOneHuman" VerticalAlignment="Center"
+                        <TextBlock Grid.Column="1" Text="Version 1.5.4  •  OffByOneHuman" VerticalAlignment="Center"
                                    Foreground="{ThemeResource MutedTextBrush}" />
                         <ToggleButton x:Name="ThemeToggleButton" Grid.Column="2" Width="40" Height="40" MinWidth="40" MinHeight="40" Padding="0"
                                       Background="{ThemeResource AccentBrush}" Foreground="{ThemeResource AccentForegroundBrush}"
