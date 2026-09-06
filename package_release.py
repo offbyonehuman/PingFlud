@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PROJECT = ROOT / "src" / "PingFlud.WinUI" / "PingFlud.WinUI.csproj"
+CHANGELOG = ROOT / "CHANGELOG.md"
 PROJECT_ROOT = ET.parse(PROJECT).getroot()
 VERSION = PROJECT_ROOT.findtext(".//Version")
 WINDOWS_APP_SDK_VERSION = next(
@@ -22,8 +23,11 @@ WINDOWS_APP_SDK_VERSION = next(
     ),
     None,
 )
+DOTNET_RUNTIME_VERSION = "8.0.30"
 if not VERSION or not WINDOWS_APP_SDK_VERSION:
     raise RuntimeError("PingFlud.WinUI.csproj must define Version and Microsoft.WindowsAppSDK.")
+if not CHANGELOG.is_file() or f"## {VERSION} -" not in CHANGELOG.read_text(encoding="utf-8"):
+    raise RuntimeError(f"CHANGELOG.md must contain a dated release entry for version {VERSION}.")
 
 tracked_paths = subprocess.check_output(
     ["git", "-C", str(ROOT), "ls-files", "-z"]
@@ -40,15 +44,28 @@ source_documents = {
     "THIRD_PARTY_NOTICES.md",
     "package_release.py",
 }
+source_documents.update(name for name in tracked_names if name.startswith("third_party/"))
 source_documents.update(
     path.relative_to(ROOT).as_posix()
     for path in (ROOT / "third_party").rglob("*")
     if path.is_file()
 )
-missing_source_documents = sorted(source_documents - tracked_names)
+missing_source_documents = sorted(
+    name for name in source_documents if name not in tracked_names or not (ROOT / name).is_file()
+)
 if missing_source_documents:
     raise RuntimeError(
         "Source packaging requires these files to be staged or committed: " + ", ".join(missing_source_documents)
+    )
+unstaged_source_documents = sorted(
+    name
+    for name in source_documents
+    if subprocess.check_output(["git", "-C", str(ROOT), "show", f":{name}"]) != (ROOT / name).read_bytes()
+)
+if unstaged_source_documents:
+    raise RuntimeError(
+        "Source packaging requires these files to match the Git index; stage or commit them first: "
+        + ", ".join(unstaged_source_documents)
     )
 
 EXPECTED_MACHINE = {"win-x86": 0x014C, "win-x64": 0x8664, "win-arm64": 0xAA64}
@@ -58,6 +75,13 @@ FLAVORS = {
 }
 NUGET_PACKAGES = Path(os.environ.get("NUGET_PACKAGES", str(Path.home() / ".nuget" / "packages")))
 ASSETS_FILE = PROJECT.parent / "obj" / "project.assets.json"
+WINDOWS_SDK_NET_REF_ID = "Microsoft.Windows.SDK.NET.Ref"
+WINDOWS_SDK_NET_REF_LICENSE_URL = "https://aka.ms/WinSDKLicenseURL"
+DOTNET_RUNTIME_PACK_PREFIXES = (
+    "Microsoft.NETCore.App.Runtime.",
+    "Microsoft.WindowsDesktop.App.Runtime.",
+    "Microsoft.AspNetCore.App.Runtime.",
+)
 BUILD_ONLY_PACKAGE_IDS = {
     "microsoft.net.illink.tasks",
     "microsoft.windows.sdk.buildtools",
@@ -134,6 +158,90 @@ for package_notice, committed_notice, package_id, version in NOTICE_PAIRS:
     if package_notice.read_bytes() != committed_notice.read_bytes():
         raise RuntimeError(f"Committed third-party notice does not match {package_id} {version}: {committed_notice}")
 
+
+def resolved_runtime_pack_refs() -> list[tuple[str, str]]:
+    references: set[tuple[str, str]] = set()
+    for artifact_root in FLAVORS.values():
+        for deps_file in artifact_root.rglob("*.deps.json"):
+            deps = json.loads(deps_file.read_text(encoding="utf-8"))
+            for library, metadata in deps.get("libraries", {}).items():
+                if metadata.get("type") != "runtimepack" or "/" not in library:
+                    continue
+                package_id, version = library.split("/", 1)
+                if package_id.startswith("runtimepack."):
+                    package_id = package_id.removeprefix("runtimepack.")
+                references.add((package_id, version))
+    return sorted(references)
+
+
+def validate_portable_dotnet_runtime() -> None:
+    runtime_pack_refs: set[tuple[str, str]] = set()
+    runtime_pack_paths: list[Path] = []
+    for rid in EXPECTED_MACHINE:
+        deps_files = sorted((PROJECT.parent / "obj").rglob(f"{rid}/PingFlud.deps.json"))
+        if not deps_files:
+            raise RuntimeError(f"Portable publish metadata is missing for {rid}.")
+        runtime_pack_paths.append(deps_files[-1])
+    for deps_file in runtime_pack_paths:
+        deps = json.loads(deps_file.read_text(encoding="utf-8"))
+        file_runtime_pack_refs: set[tuple[str, str]] = set()
+        for library, metadata in deps.get("libraries", {}).items():
+            if metadata.get("type") != "runtimepack" or "/" not in library:
+                continue
+            package_id, version = library.split("/", 1)
+            package_id = package_id.removeprefix("runtimepack.")
+            if package_id.startswith(DOTNET_RUNTIME_PACK_PREFIXES):
+                file_runtime_pack_refs.add((package_id, version))
+                runtime_pack_refs.add((package_id, version))
+                if version != DOTNET_RUNTIME_VERSION:
+                    raise RuntimeError(
+                        f"Portable output uses {package_id} {version}; expected .NET runtime {DOTNET_RUNTIME_VERSION}."
+                    )
+        if not file_runtime_pack_refs:
+            raise RuntimeError(f"Portable publish metadata has no .NET runtime pack: {deps_file}")
+    if not runtime_pack_refs:
+        raise RuntimeError(
+            "Portable publish metadata must record the .NET runtime version "
+            f"{DOTNET_RUNTIME_VERSION}; packs={sorted(runtime_pack_refs)}"
+        )
+
+
+validate_portable_dotnet_runtime()
+RUNTIME_PACK_REFS = resolved_runtime_pack_refs()
+for package_id, version in RUNTIME_PACK_REFS:
+    package_id_lower = package_id.lower()
+    if package_id_lower.startswith(tuple(prefix.lower() for prefix in DOTNET_RUNTIME_PACK_PREFIXES)):
+        if version != DOTNET_RUNTIME_VERSION:
+            raise RuntimeError(f"Unexpected .NET runtime pack version: {package_id} {version}")
+        continue
+    if package_id_lower != WINDOWS_SDK_NET_REF_ID.lower():
+        raise RuntimeError(f"Runtime pack requires an attribution mapping: {package_id} {version}")
+    package_dir = NUGET_PACKAGES / package_id.lower() / version.lower()
+    if not package_dir.is_dir():
+        raise RuntimeError(f"Restore the runtime pack {package_id} {version} before packaging the release.")
+    package_archives = sorted(package_dir.glob("*.nupkg"))
+    if len(package_archives) != 1:
+        raise RuntimeError(f"Expected one restored archive for runtime pack {package_id} {version}.")
+    with zipfile.ZipFile(package_archives[0]) as package_archive:
+        nuspec_names = [name for name in package_archive.namelist() if name.lower().endswith(".nuspec")]
+        if len(nuspec_names) != 1:
+            raise RuntimeError(f"Expected one nuspec in runtime pack {package_id} {version}.")
+        package_metadata = package_archive.read(nuspec_names[0]).decode("utf-8-sig")
+    metadata_path = ROOT / "third_party" / "windows-sdk-net-ref" / version / "LICENSE-TERMS-URL.txt"
+    if not metadata_path.is_file():
+        raise RuntimeError(f"Missing runtime-pack license record for {package_id} {version}: {metadata_path}")
+    metadata = metadata_path.read_text(encoding="utf-8")
+    if package_id not in metadata or version not in metadata or WINDOWS_SDK_NET_REF_LICENSE_URL not in metadata:
+        raise RuntimeError(f"Runtime-pack license record is incomplete for {package_id} {version}: {metadata_path}")
+    if f"<id>{package_id}</id>" not in package_metadata or f"<version>{version}</version>" not in package_metadata:
+        raise RuntimeError(f"Restored runtime-pack metadata does not match {package_id} {version}.")
+
+runtime_pack_notice_files = sorted(
+    (ROOT / "third_party" / "windows-sdk-net-ref" / version / "LICENSE-TERMS-URL.txt").relative_to(ROOT).as_posix()
+    for package_id, version in RUNTIME_PACK_REFS
+    if package_id.lower() == WINDOWS_SDK_NET_REF_ID.lower()
+)
+
 RELEASE = ROOT / "release"
 if RELEASE.exists():
     shutil.rmtree(RELEASE)
@@ -207,11 +315,17 @@ manifest = {
     "product": "Ping Flud",
     "version": VERSION,
     "windows_app_sdk_version": WINDOWS_APP_SDK_VERSION,
+    "dotnet_runtime_version": DOTNET_RUNTIME_VERSION,
     "developer": "OffByOneHuman",
     "packaging_note": "Compact runtime-dependent and compressed self-contained WinUI 3 distributions; optional symbols are omitted from release archives.",
+    "resolved_nuget_notice_files": sorted(path.relative_to(ROOT).as_posix() for _, path, _, _ in NOTICE_PAIRS),
+    "runtime_pack_notice_files": runtime_pack_notice_files,
     "redistributed_notice_files": sorted(
-        path.relative_to(ROOT).as_posix() for _, path, _, _ in NOTICE_PAIRS
+        path.relative_to(ROOT).as_posix() for path in (ROOT / "third_party").rglob("*") if path.is_file()
     ),
+    "runtime_pack_references": [
+        {"package": package_id, "version": version} for package_id, version in RUNTIME_PACK_REFS
+    ],
     "artifacts": records,
     "source": {
         "zip": source_archive.name,

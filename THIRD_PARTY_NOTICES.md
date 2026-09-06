@@ -12,9 +12,13 @@ The exact MIT licenses and third-party notices for the .NET 8.0.30 source compon
 - [`third_party/dotnet/winforms`](third_party/dotnet/winforms)
 - [`third_party/dotnet/wpf`](third_party/dotnet/wpf)
 
-Those files govern the redistributed runtime components and contain notices for components under additional licenses. They must remain with self-contained distributions. The notices are pinned to 8.0.30, matching the runtime version recorded in the portable packages.
+Those files govern the redistributed runtime components and contain notices for components under additional licenses. They must remain with self-contained distributions. `package_release.py` fails if a portable package is published with a different .NET runtime version than 8.0.30.
 
 Upstream provenance: [dotnet/runtime v8.0.30](https://github.com/dotnet/runtime/tree/v8.0.30), [dotnet/winforms v8.0.30](https://github.com/dotnet/winforms/tree/v8.0.30), and [dotnet/wpf v8.0.30](https://github.com/dotnet/wpf/tree/v8.0.30).
+
+## Windows SDK .NET targeting pack
+
+The WinUI project targets the Windows SDK .NET targeting pack `Microsoft.Windows.SDK.NET.Ref` 10.0.19041.56. Published WinUI outputs record it as a runtime pack and redistribute its `Microsoft.Windows.SDK.NET.dll` and `WinRT.Runtime.dll` assemblies. The package declares the Microsoft Windows SDK license terms at [https://aka.ms/WinSDKLicenseURL](https://aka.ms/WinSDKLicenseURL); the NuGet package contains no license or notice text file. The package-declared license location and exact version are recorded in [`third_party/windows-sdk-net-ref/10.0.19041.56/LICENSE-TERMS-URL.txt`](third_party/windows-sdk-net-ref/10.0.19041.56/LICENSE-TERMS-URL.txt) and included in every binary archive.
 
 ## Shipped .NET package dependencies
 
@@ -41,7 +45,7 @@ The application uses [`Microsoft.WindowsAppSDK`](https://github.com/microsoft/Wi
 
 The published output also contains `Microsoft.Web.WebView2` 1.0.3179.45. Its Microsoft package license and notices are preserved under [`third_party/webview2`](third_party/webview2).
 
-The package notice files are copied from the resolved NuGet packages without content changes. `package_release.py` reads the restored WinUI asset graph, honors `NUGET_PACKAGES`, and fails if any resolved package notice is absent or differs from the committed version. `Microsoft.Windows.SDK.BuildTools` and its MSIX helper, along with `Microsoft.NET.ILLink.Tasks`, are build-time packages and are not bundled.
+The package notice files are copied from the resolved NuGet packages without content changes. `package_release.py` reads the restored WinUI asset graph, honors `NUGET_PACKAGES`, validates the runtime-pack entries recorded in each published `.deps.json`, and fails if any resolved package notice is absent or differs from the committed version. `Microsoft.Windows.SDK.BuildTools` and its MSIX helper, along with `Microsoft.NET.ILLink.Tasks`, are build-time packages and are not bundled.
 
 ## Development and test dependencies
 

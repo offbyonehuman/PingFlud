@@ -1,0 +1,12 @@
+Microsoft.Windows.SDK.NET.Ref 10.0.19041.56
+
+The NuGet package declares the following Microsoft Windows SDK license terms URL:
+https://aka.ms/WinSDKLicenseURL
+
+The package does not contain a license or notice text file. This record preserves the applicable package-declared license location for the Windows SDK .NET targeting-pack components redistributed by Ping Flud.
+
+Package metadata:
+- Package: Microsoft.Windows.SDK.NET.Ref
+- Version: 10.0.19041.56
+- Project URL: https://aka.ms/WinSDKProjectURL
+- License URL: https://aka.ms/WinSDKLicenseURL

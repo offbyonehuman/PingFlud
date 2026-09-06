@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.5.5 - 2026-09-06
 
 - Added explicit license scope, dependency credits, exact bundled package notices, and contributor provenance requirements.
 - Added a Code of Conduct and included community/legal documentation in release archives.
 - Release packaging now verifies committed notices against the restored NuGet packages before creating archives.
+- Release packaging now validates that self-contained WinUI outputs use the documented .NET 8.0.30 runtime and documents the Windows SDK .NET targeting pack.
+- Hardened release versioning, source-index validation, and the generated redistributed-notice manifest.
 
 ## 1.5.4 - 2026-09-02
 

@@ -15,6 +15,7 @@ The following components may be present in release archives. Their license and n
 | .NET runtime | 8.0.30 | MIT plus notices for included third-party material | `third_party/dotnet/runtime/` |
 | Windows Forms runtime components | 8.0.30 | MIT plus third-party notices | `third_party/dotnet/winforms/` |
 | WPF runtime components | 8.0.30 | MIT plus third-party notices | `third_party/dotnet/wpf/` |
+| Microsoft.Windows.SDK.NET.Ref | 10.0.19041.56 | Microsoft Windows SDK license terms | `third_party/windows-sdk-net-ref/10.0.19041.56/` |
 | System.Drawing.Common | 8.0.5 | MIT | `third_party/dotnet/system.drawing.common/` |
 | Microsoft.Win32.SystemEvents | 8.0.0 | MIT | `third_party/dotnet/systemevents/` |
 | System.Numerics.Tensors | 9.0.0 | MIT | `third_party/dotnet/system.numerics.tensors/` |
@@ -35,6 +36,7 @@ Upstream projects:
 - [.NET runtime](https://github.com/dotnet/runtime/tree/v8.0.30)
 - [Windows Forms](https://github.com/dotnet/winforms/tree/v8.0.30)
 - [WPF](https://github.com/dotnet/wpf/tree/v8.0.30)
+- [Microsoft.Windows.SDK.NET.Ref 10.0.19041.56](https://aka.ms/WinSDKProjectURL) — license terms: https://aka.ms/WinSDKLicenseURL
 - [System.Drawing.Common](https://github.com/dotnet/winforms)
 - [System.Numerics.Tensors](https://github.com/dotnet/runtime)
 - [Microsoft.Web.WebView2 1.0.3179.45](https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.3179.45)
