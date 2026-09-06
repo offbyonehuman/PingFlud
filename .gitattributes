@@ -1,2 +1,2 @@
 # Preserve upstream third-party notices exactly, including line endings and spacing.
-third_party/** -diff
+third_party/** -text -diff
