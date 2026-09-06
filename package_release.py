@@ -57,12 +57,15 @@ if missing_source_documents:
     raise RuntimeError(
         "Source packaging requires these files to be staged or committed: " + ", ".join(missing_source_documents)
     )
-unstaged_source_documents = sorted(
-    name
-    for name in source_documents
-    if subprocess.check_output(["git", "-C", str(ROOT), "show", f":{name}"]) != (ROOT / name).read_bytes()
+unstaged_check = subprocess.run(
+    ["git", "-C", str(ROOT), "diff", "--quiet", "--", *sorted(source_documents)],
+    check=False,
 )
-if unstaged_source_documents:
+if unstaged_check.returncode:
+    unstaged_source_documents = subprocess.check_output(
+        ["git", "-C", str(ROOT), "diff", "--name-only", "--", *sorted(source_documents)],
+        text=True,
+    ).splitlines()
     raise RuntimeError(
         "Source packaging requires these files to match the Git index; stage or commit them first: "
         + ", ".join(unstaged_source_documents)
