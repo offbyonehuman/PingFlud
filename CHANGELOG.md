@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added explicit license scope, dependency credits, exact bundled package notices, and contributor provenance requirements.
+- Added a Code of Conduct and included community/legal documentation in release archives.
+- Release packaging now verifies committed notices against the restored NuGet packages before creating archives.
+
 ## 1.5.4 - 2026-09-02
 
 - Hardened wildcard parsing and bounded target-list importing against excessive input and memory use.
