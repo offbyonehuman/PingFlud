@@ -28,4 +28,18 @@ public sealed class RelayCommandTests
 
         Assert.True(command.CanExecute(null));
     }
+
+    [Fact]
+    public async Task ExecuteReportsUnhandledFailuresWithoutEscapingAsyncVoid()
+    {
+        var observed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var expected = new InvalidOperationException("synthetic failure");
+        var command = new AsyncRelayCommand(() => Task.FromException(expected));
+        command.UnhandledException += exception => observed.TrySetResult(exception);
+
+        command.Execute(null);
+
+        Assert.Same(expected, await observed.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(command.CanExecute(null));
+    }
 }

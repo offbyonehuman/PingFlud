@@ -155,8 +155,8 @@ artifacts\winui-portable\win-arm64
 
 ## Contributing and security
 
-Bug reports and focused pull requests are welcome. Please do not use real private-network details in issues or test fixtures. Report security concerns using the guidance in [SECURITY.md](SECURITY.md).
+Bug reports and focused pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and attribution rules, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards. Please do not use real private-network details in issues or test fixtures. Report security concerns using the guidance in [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Runtime and development dependency notices are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The Ping Flud source is licensed under MIT — see [LICENSE](LICENSE). Bundled runtime components and development packages retain their own licenses and notices; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [CREDITS.md](CREDITS.md).

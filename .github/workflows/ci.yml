@@ -14,15 +14,16 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 8.0.x
 
       - name: Restore
-        run: dotnet restore PingFlud.sln
+        run: |
+          dotnet restore PingFlud.sln -p:NuGetAuditMode=all '-p:WarningsAsErrors=NU1900%3BNU1901%3BNU1902%3BNU1903%3BNU1904%3BNU1905'
 
       - name: Build
         run: dotnet build PingFlud.sln -c Release --no-restore --nologo
@@ -43,10 +44,35 @@ jobs:
             'tests/PingFlud.Application.Tests/PingFlud.Application.Tests.csproj'
           )
           foreach ($project in $projects) {
-            if ($project -like '*PingFlud.Application.csproj') {
-              dotnet list $project package --vulnerable --include-transitive --framework net8.0
+            $frameworks = if ($project -like '*PingFlud.Application.csproj') {
+              @('net8.0', 'net8.0-windows')
             } else {
-              dotnet list $project package --vulnerable --include-transitive
+              @($null)
             }
-            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+            foreach ($framework in $frameworks) {
+              $arguments = @('list', $project, 'package', '--vulnerable', '--include-transitive', '--format', 'json')
+              if ($null -ne $framework) { $arguments += @('--framework', $framework) }
+              $json = dotnet @arguments | Out-String
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+              $report = $json | ConvertFrom-Json
+              $vulnerable = foreach ($projectReport in @($report.projects)) {
+                foreach ($frameworkReport in @($projectReport.frameworks)) {
+                  foreach ($package in @($frameworkReport.topLevelPackages) + @($frameworkReport.transitivePackages)) {
+                    if ($null -ne $package.vulnerabilities -and @($package.vulnerabilities).Count -gt 0) { $package }
+                  }
+                }
+              }
+              if (@($vulnerable).Count -gt 0) {
+                $vulnerable | ConvertTo-Json -Depth 10
+                throw "Vulnerable packages found in $project ($framework)."
+              }
+            }
           }
+
+      - name: Publish and package release artifacts
+        shell: pwsh
+        run: |
+          ./build-all.ps1
+          python package_release.py

@@ -146,8 +146,9 @@ public sealed class SettingsDialogTests
                     "Responding", 1, 1, 0, 64))
                 .ToList();
 
-            typeof(MainForm).GetMethod("ExportImages", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .Invoke(form, [path, rows]);
+            typeof(MainForm).GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                .Single(method => method.Name == "ExportImages" && method.GetParameters().Length == 3)
+                .Invoke(form, [path, rows, CancellationToken.None]);
 
             Assert.True(File.Exists(path));
             Assert.True(new FileInfo(path).Length > 0);
@@ -172,7 +173,7 @@ public sealed class SettingsDialogTests
             File.WriteAllText(Path.Combine(directory, "report-002.png"), "stale");
 
             typeof(MainForm).GetMethod("PublishExportFiles", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
-                .Invoke(null, [staging, destination]);
+                .Invoke(null, [staging, destination, CancellationToken.None]);
 
             Assert.Equal("current", File.ReadAllText(destination));
             Assert.False(File.Exists(Path.Combine(directory, "report-002.png")));

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using PingFlud.Core;
 
@@ -5,57 +6,110 @@ namespace PingFlud.Application;
 
 public static class SimplePdf
 {
-    public static void Write(string path, IEnumerable<ScanResult> rows)
+    private const int LinesPerPage = 51;
+    private const int WrapWidth = 120;
+
+    public static void Write(
+        string path,
+        IEnumerable<ScanResult> rows,
+        CancellationToken cancellationToken = default)
     {
-        var data = rows.Select(row =>
-            $"{row.Target} | {row.Status} | {row.RoundtripMs} ms | {row.PacketLossPercent:0.#}% loss | {row.Address} | {row.HostName}").ToList();
-        var wrapped = data.SelectMany(line => Wrap(line, 120)).ToList();
-        var pages = wrapped.Chunk(51).Select(chunk => chunk.ToList()).ToList();
-        if (pages.Count == 0) pages.Add([]);
+        ArgumentNullException.ThrowIfNull(rows);
+        var rowList = rows as IReadOnlyList<ScanResult> ?? rows.ToArray();
+        var wrappedLineCount = 0L;
 
-        var fontId = 3 + pages.Count * 2;
-        var objects = new List<string>
+        foreach (var row in rowList)
         {
-            "<< /Type /Catalog /Pages 2 0 R >>",
-            "<< /Type /Pages /Kids [" + string.Join(' ', Enumerable.Range(0, pages.Count).Select(i => $"{3 + i * 2} 0 R")) + $"] /Count {pages.Count} >>"
-        };
+            cancellationToken.ThrowIfCancellationRequested();
+            var lineLength = FormatRow(row).Length;
+            wrappedLineCount += Math.Max(1, (lineLength + WrapWidth - 1) / WrapWidth);
+        }
 
-        for (var page = 0; page < pages.Count; page++)
+        var pageCountLong = Math.Max(1L, (wrappedLineCount + LinesPerPage - 1) / LinesPerPage);
+        if (pageCountLong > int.MaxValue)
+            throw new InvalidOperationException("The PDF report contains too many pages.");
+
+        var pageCount = (int)pageCountLong;
+        var fontId = 3 + pageCount * 2;
+        var objectCount = fontId;
+        var offsets = new long[objectCount + 1];
+
+        using var stream = File.Create(path);
+        WriteAscii(stream, "%PDF-1.4\n");
+
+        void WriteObject(int id, string body)
         {
-            var lines = new List<string>
+            offsets[id] = stream.Position;
+            WriteAscii(stream, $"{id} 0 obj\n{body}\nendobj\n");
+        }
+
+        WriteObject(1, "<< /Type /Catalog /Pages 2 0 R >>");
+        WriteObject(
+            2,
+            "<< /Type /Pages /Kids [" +
+            string.Join(' ', Enumerable.Range(0, pageCount).Select(i => $"{3 + i * 2} 0 R")) +
+            $"] /Count {pageCount} >>");
+
+        using var wrappedLines = EnumerateWrappedLines(rowList, cancellationToken).GetEnumerator();
+        for (var page = 0; page < pageCount; page++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var lines = new List<string>(LinesPerPage + 4)
             {
                 "Ping Flud Results",
                 $"Generated {DateTime.Now:u}",
-                $"Page {page + 1} of {pages.Count}",
+                $"Page {page + 1} of {pageCount}",
                 "Target | Status | ms | loss | Address | Reverse DNS"
             };
-            lines.AddRange(pages[page]);
+
+            while (lines.Count < LinesPerPage + 4 && wrappedLines.MoveNext())
+                lines.Add(wrappedLines.Current);
+
             var content = new StringBuilder("BT /F1 8 Tf 32 805 Td 12 TL ");
             foreach (var line in lines)
                 content.Append('(').Append(Escape(line)).Append(") Tj T* ");
             content.Append("ET");
+
+            var pageId = 3 + page * 2;
             var contentId = 4 + page * 2;
-            objects.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 {fontId} 0 R >> >> /Contents {contentId} 0 R >>");
-            objects.Add($"<< /Length {Encoding.ASCII.GetByteCount(content.ToString())} >>\nstream\n{content}\nendstream");
+            WriteObject(
+                pageId,
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 {fontId} 0 R >> >> /Contents {contentId} 0 R >>");
+            WriteObject(
+                contentId,
+                $"<< /Length {Encoding.ASCII.GetByteCount(content.ToString())} >>\nstream\n{content}\nendstream");
         }
 
-        objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-        using var stream = File.Create(path);
-        using var writer = new StreamWriter(stream, Encoding.ASCII, 1024, true) { NewLine = "\n" };
-        writer.Write("%PDF-1.4\n");
-        writer.Flush();
-        var offsets = new List<long> { 0 };
-        for (var i = 0; i < objects.Count; i++)
-        {
-            offsets.Add(stream.Position);
-            writer.Write($"{i + 1} 0 obj\n{objects[i]}\nendobj\n");
-            writer.Flush();
-        }
+        WriteObject(fontId, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+
         var xref = stream.Position;
-        writer.Write($"xref\n0 {objects.Count + 1}\n0000000000 65535 f \n");
-        foreach (var offset in offsets.Skip(1)) writer.Write($"{offset:0000000000} 00000 n \n");
-        writer.Write($"trailer\n<< /Size {objects.Count + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF");
+        WriteAscii(stream, $"xref\n0 {objectCount + 1}\n0000000000 65535 f \n");
+        for (var id = 1; id <= objectCount; id++)
+            WriteAscii(stream, $"{offsets[id]:0000000000} 00000 n \n");
+        WriteAscii(
+            stream,
+            $"trailer\n<< /Size {objectCount + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF");
+        stream.Flush(flushToDisk: true);
     }
+
+    private static IEnumerable<string> EnumerateWrappedLines(
+        IReadOnlyList<ScanResult> rows,
+        CancellationToken cancellationToken)
+    {
+        foreach (var row in rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var line in Wrap(FormatRow(row), WrapWidth))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return line;
+            }
+        }
+    }
+
+    private static string FormatRow(ScanResult row) =>
+        $"{row.Target} | {row.Status} | {row.RoundtripMs?.ToString(CultureInfo.InvariantCulture) ?? string.Empty} ms | " +
+        $"{row.PacketLossPercent.ToString("0.#", CultureInfo.InvariantCulture)}% loss | {row.Address} | {row.HostName}";
 
     private static IEnumerable<string> Wrap(string value, int width)
     {
@@ -71,4 +125,7 @@ public static class SimplePdf
             ascii.Append(rune.Value < 128 ? (char)rune.Value : $"\\u{{{rune.Value:X}}}");
         return ascii.ToString().Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
     }
+
+    private static void WriteAscii(Stream stream, string value) =>
+        stream.Write(Encoding.ASCII.GetBytes(value));
 }

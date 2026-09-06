@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added explicit license scope, dependency credits, exact bundled package notices, and contributor provenance requirements.
+- Added a Code of Conduct and included community/legal documentation in release archives.
+- Release packaging now verifies committed notices against the restored NuGet packages before creating archives.
+
+## 1.5.4 - 2026-09-02
+
+- Hardened wildcard parsing and bounded target-list importing against excessive input and memory use.
+- Neutralized spreadsheet formula prefixes in CSV and spreadsheet-compatible HTML exports.
+- Made report publication transactional with rollback protection and indexed large result updates.
+- Added scanner settings snapshots, observable async-command failures, transitive NuGet auditing, and reproducible release packaging.
+
 ## 1.5.3 - 2026-09-02
 
 - Replaced legacy theme choices with a Light/Dark toggle; Graphite remains the dark default.

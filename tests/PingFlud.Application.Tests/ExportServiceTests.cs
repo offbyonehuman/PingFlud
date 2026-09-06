@@ -198,6 +198,31 @@ public sealed class ExportServiceTests
     }
 
     [Fact]
+    public void PngPublicationRollsBackWhenOnePageCannotBeReplaced()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"pingflud-png-rollback-{Guid.NewGuid():N}");
+        var staging = Path.Combine(directory, "staging");
+        var destination = Path.Combine(directory, "report.png");
+        Directory.CreateDirectory(staging);
+        try
+        {
+            File.WriteAllText(destination, "old-first-page");
+            File.WriteAllText(Path.Combine(staging, "report.png"), "new-first-page");
+            File.WriteAllText(Path.Combine(staging, "report-002.png"), "new-second-page");
+            Directory.CreateDirectory(Path.Combine(directory, "report-002.png"));
+
+            Assert.ThrowsAny<IOException>(() =>
+                ExportService.PublishFiles(staging, destination, CancellationToken.None));
+
+            Assert.Equal("old-first-page", File.ReadAllText(destination));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void HtmlReportRejectsScriptTags()
     {
         var rows = new[] { Sample with { HostName = "<img src=x onerror=alert(1)>" } };

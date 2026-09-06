@@ -15,6 +15,7 @@ public class TargetParserTests
  [Fact] public void RejectsInvalidSpecs()=>Assert.Throws<FormatException>(()=>TargetParser.Expand("999.2.3.4",100));
  [Fact] public void RejectsInvalidHostnameCharacters()=>Assert.Throws<FormatException>(()=>TargetParser.Expand("host!name",100));
  [Fact] public void RejectsWildcardWithNoValidOctetMatches()=>Assert.Throws<FormatException>(()=>TargetParser.Expand("10.0.0.9??",100));
+ [Fact] public void RejectsPathologicallyLongWildcardPatterns()=>Assert.Throws<FormatException>(()=>TargetParser.Expand("10.0.0."+new string('?',1000),1000));
  [Fact] public void ExpansionObservesCancellation(){using var cancellation=new CancellationTokenSource();cancellation.Cancel();Assert.Throws<OperationCanceledException>(()=>TargetParser.Expand("10.*.*.*",1_000_000,cancellation.Token));}
  [Fact] public void RejectsOversizedRawInputBeforeSplitting()=>Assert.Throws<InvalidOperationException>(()=>TargetParser.Expand(new string('a',4*1024*1024+1),100));
 }
@@ -28,6 +29,8 @@ public class SettingsTests
  [InlineData("+cmd","'+cmd")]
  [InlineData("-2","'-2")]
  [InlineData("@SUM(A1)","'@SUM(A1)")]
+ [InlineData(" =1+1","' =1+1")]
+ [InlineData("\t=1+1","'\t=1+1")]
  public void CsvNeutralizesSpreadsheetFormulas(string input,string expected)=>Assert.Equal(expected,ExportFormatting.Csv(input));
  [Fact] public void FiltersResults(){var data=new[]{new ScanResult("a",true,1,"h","1.1.1.1","OK",1,1,0,64),new ScanResult("b",false,null,"","","Timeout",1,0,100,null)};Assert.Single(ResultFilters.Apply(data,ResultFilter.Responding,""));Assert.Single(ResultFilters.Apply(data,ResultFilter.All,"time"));}
  [Fact] public void SortsIpv4AddressesNumerically(){var values=new[]{"192.168.1.100","192.168.1.10","192.168.1.3","192.168.1.2","192.168.1.1"};Assert.Equal(new[]{"192.168.1.1","192.168.1.2","192.168.1.3","192.168.1.10","192.168.1.100"},values.OrderBy(x=>x,NetworkAddressComparer.Instance));}

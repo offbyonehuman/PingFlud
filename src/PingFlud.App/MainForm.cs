@@ -1,22 +1,13 @@
 using System.ComponentModel;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.Net;
 using System.Text;
-using System.Text.Json;
-using System.Xml.Linq;
+using System.Xml;
 using PingFlud.Application;
 using PingFlud.Core;
 
 namespace PingFlud.App;
-
-public sealed class AppState
-{
-    public ScanSettings Settings { get; set; } = new();
-    public List<string> History { get; set; } = [];
-    public string Title { get; set; } = "Ping Flud";
-    public string Subtitle { get; set; } = PingFlud.Application.AppState.DefaultSubtitle;
-    public string ThemeName { get; set; } = "Graphite";
-}
 
 public sealed class MainForm : Form
 {
@@ -34,10 +25,10 @@ public sealed class MainForm : Form
         "RESULTS\n\n● Responding: at least one ICMP reply.\n○ Not responding: no reply within the configured attempts and timeout.";
 
     private readonly string _statePath;
+    private readonly IAppStateStore _stateStore;
     private readonly BindingList<ScanResult> _allResults = [];
     private readonly BindingSource _source = new();
     private readonly List<Button> _buttons = [];
-    private readonly List<Control> _resultActions = [];
     private readonly List<Label> _labels = [];
     private readonly List<CardPanel> _cards = [];
     private readonly List<Control> _inputs = [];
@@ -83,6 +74,10 @@ public sealed class MainForm : Form
     private StatusStrip _statusStrip = null!;
     private Button _startButton = null!;
     private Button _stopButton = null!;
+    private Button _copyButton = null!;
+    private Button _clearButton = null!;
+    private Button _exportButton = null!;
+    private ComboBox _moreFormats = null!;
     private CancellationTokenSource? _scanCancellation;
     private CancellationTokenSource? _exportCancellation;
     private string? _sortProperty = nameof(ScanResult.Address);
@@ -96,7 +91,8 @@ public sealed class MainForm : Form
     {
         _statePath = statePath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PingFlud", "settings.json");
-        _state = LoadState();
+        _stateStore = new JsonAppStateStore(_statePath);
+        _state = _stateStore.Load();
         _theme = ThemeCatalog.Get(_state.ThemeName);
         Text = _state.Title;
         MinimumSize = new Size(1180, 720);
@@ -398,32 +394,30 @@ public sealed class MainForm : Form
         _search.TextChanged += (_, _) => ApplyFilter();
         _inputs.Add(_search);
         layout.Controls.Add(_search, 3, 0);
-        var copyButton = CreateButton("Copy", "secondary", (_, _) => CopySelected());
-        var clearButton = CreateButton("Clear", "secondary", (_, _) => ClearResults());
-        var exportButton = CreateButton("Export CSV", "primary", (_, _) => Export("CSV"));
-        _resultActions.AddRange([copyButton, clearButton, exportButton]);
-        layout.Controls.Add(copyButton, 4, 0);
-        layout.Controls.Add(clearButton, 5, 0);
-        layout.Controls.Add(exportButton, 6, 0);
-        var moreFormats = new ComboBox
+        _copyButton = CreateButton("Copy", "secondary", (_, _) => CopySelected());
+        _clearButton = CreateButton("Clear", "secondary", (_, _) => ClearResults());
+        _exportButton = CreateButton("Export CSV", "primary", (_, _) => Export("CSV"));
+        layout.Controls.Add(_copyButton, 4, 0);
+        layout.Controls.Add(_clearButton, 5, 0);
+        layout.Controls.Add(_exportButton, 6, 0);
+        _moreFormats = new ComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
             AccessibleName = "More export formats",
             Dock = DockStyle.Fill,
             Margin = new Padding(4, 5, 0, 5)
         };
-        moreFormats.Items.AddRange(["More formats…", "XML", "HTML", "PDF", "PNG image", "TXT", "XLS-compatible HTML"]);
-        moreFormats.SelectedIndex = 0;
-        moreFormats.SelectedIndexChanged += (_, _) =>
+        _moreFormats.Items.AddRange(["More formats…", "XML", "HTML", "PDF", "PNG image", "TXT", "XLS-compatible HTML"]);
+        _moreFormats.SelectedIndex = 0;
+        _moreFormats.SelectedIndexChanged += (_, _) =>
         {
-            if (moreFormats.SelectedIndex <= 0) return;
-            var format = moreFormats.SelectedItem!.ToString()!;
-            BeginInvoke(() => moreFormats.SelectedIndex = 0);
+            if (_moreFormats.SelectedIndex <= 0) return;
+            var format = _moreFormats.SelectedItem!.ToString()!;
+            BeginInvoke(() => _moreFormats.SelectedIndex = 0);
             Export(format);
         };
-        _inputs.Add(moreFormats);
-        _resultActions.Add(moreFormats);
-        layout.Controls.Add(moreFormats, 7, 0);
+        _inputs.Add(_moreFormats);
+        layout.Controls.Add(_moreFormats, 7, 0);
         panel.Controls.Add(layout);
         return panel;
     }
@@ -512,8 +506,9 @@ public sealed class MainForm : Form
         {
             _status.Text = "Expanding targets…";
             var input = _targets.Text;
-            var cap = _state.Settings.ExpansionCap;
-            var expanded = await Task.Run(() => TargetParser.Expand(input, cap, cancellation.Token), cancellation.Token);
+            var settings = _state.Settings.Clone();
+            settings.Validate();
+            var expanded = await Task.Run(() => TargetParser.Expand(input, settings.ExpansionCap, cancellation.Token), cancellation.Token);
             if (expanded.Count == 0) return;
 
             Remember(input);
@@ -552,7 +547,7 @@ public sealed class MainForm : Form
                         nextFilterRefresh = DateTime.UtcNow.AddMilliseconds(250);
                     }
                 });
-                await new PingScanner().ScanAsync(expanded, _state.Settings, report, cancellation.Token);
+                await new PingScanner().ScanAsync(expanded, settings, report, cancellation.Token);
             }
             finally
             {
@@ -631,7 +626,11 @@ public sealed class MainForm : Form
         _emptyStateDetail.Text = hasResults
             ? "Adjust the filter or search text to show matching scan results."
             : "Enter targets above to test latency, packet loss, TTL, and reverse DNS.";
-        foreach (var action in _resultActions) action.Enabled = hasResults;
+        var canUseResults = _scanCancellation is null && _exportCancellation is null;
+        _copyButton.Enabled = visibleCount > 0 && canUseResults;
+        _clearButton.Enabled = hasResults && canUseResults;
+        _exportButton.Enabled = visibleCount > 0 && canUseResults;
+        _moreFormats.Enabled = visibleCount > 0 && canUseResults;
         ApplyButtonStyles();
 
         if (!completed) return;
@@ -649,24 +648,18 @@ public sealed class MainForm : Form
         ? rows.OrderBy(key, comparer)
         : rows.OrderByDescending(key, comparer);
 
-    private void ImportTargets()
+    private async void ImportTargets()
     {
         using var dialog = new OpenFileDialog { Filter = "Target lists|*.txt;*.csv|All files|*.*" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var fileName = dialog.FileName;
         try
         {
-            var info = new FileInfo(dialog.FileName);
-            if (!info.Exists) throw new FileNotFoundException("The selected target list no longer exists.", dialog.FileName);
-            if (info.Length > 5 * 1024 * 1024)
-            {
-                MessageBox.Show(this, "Target files are limited to 5 MB.", "File too large", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            _targets.Text = string.Join(", ", File.ReadLines(dialog.FileName)
-                .Select(line => line.Trim()).Where(line => line.Length > 0 && !line.StartsWith('#')));
-            _status.Text = $"Imported targets from {info.Name}";
+            _targets.Text = await new TargetListImporter().ImportAsync(fileName);
+            _status.Text = $"Imported targets from {Path.GetFileName(fileName)}";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "Import failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -674,9 +667,7 @@ public sealed class MainForm : Form
 
     private void Remember(string value)
     {
-        _state.History.RemoveAll(item => item.Equals(value, StringComparison.OrdinalIgnoreCase));
-        _state.History.Insert(0, value);
-        if (_state.History.Count > 20) _state.History.RemoveRange(20, _state.History.Count - 20);
+        _state.Remember(value);
         RefreshHistory();
         SaveState();
     }
@@ -744,53 +735,22 @@ public sealed class MainForm : Form
         Text = _state.Title;
     }
 
-    private AppState LoadState()
-    {
-        try
-        {
-            if (!File.Exists(_statePath)) return new AppState();
-            if (new FileInfo(_statePath).Length > 1024 * 1024) return new AppState();
-            var loaded = JsonSerializer.Deserialize<AppState>(File.ReadAllText(_statePath)) ?? new AppState();
-            loaded.Settings.Validate();
-            loaded.ThemeName = ThemeCatalog.Get(loaded.ThemeName).Name;
-            loaded.Title = NormalizeLabel(loaded.Title, "Ping Flud", 120);
-            loaded.Subtitle = NormalizeLabel(loaded.Subtitle, string.Empty, 240);
-            if (loaded.Subtitle.Equals("Fast, transparent network reachability checks", StringComparison.OrdinalIgnoreCase))
-                loaded.Subtitle = PingFlud.Application.AppState.DefaultSubtitle;
-            loaded.History = loaded.History.Where(item => !string.IsNullOrWhiteSpace(item))
-                .Select(item => item.Trim()).Where(item => item.Length <= 16_384)
-                .Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList();
-            return loaded;
-        }
-        catch { return new AppState(); }
-    }
-
     private void SaveState()
     {
-        string? tempPath = null;
         try
         {
-            var directory = Path.GetDirectoryName(_statePath)!;
-            Directory.CreateDirectory(directory);
-            tempPath = Path.Combine(directory, $".{Path.GetFileName(_statePath)}.{Guid.NewGuid():N}.tmp");
-            File.WriteAllText(tempPath, JsonSerializer.Serialize(_state, new JsonSerializerOptions { WriteIndented = true }));
-            File.Move(tempPath, _statePath, overwrite: true);
+            _stateStore.Save(_state);
         }
         catch { /* The application remains usable if settings cannot be persisted. */ }
-        finally
-        {
-            try
-            {
-                if (tempPath is not null && File.Exists(tempPath)) File.Delete(tempPath);
-            }
-            catch { /* A stale temp file is harmless and can be removed later. */ }
-        }
     }
 
-    private static string NormalizeLabel(string? value, string fallback, int maximumLength)
+    private static void TryDeleteDirectory(string path)
     {
-        var normalized = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
-        return normalized.Length <= maximumLength ? normalized : normalized[..maximumLength];
+        try
+        {
+            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+        }
+        catch { /* Cleanup must not hide the original operation result. */ }
     }
 
     private static string GetDisplayVersion()
@@ -837,13 +797,13 @@ public sealed class MainForm : Form
             try
             {
                 var stagedPath = Path.Combine(stagingDirectory, Path.GetFileName(fileName));
-                await Task.Run(() => WriteExport(kind, stagedPath, rows), token);
-                PublishExportFiles(stagingDirectory, fileName);
+                await Task.Run(() => WriteExport(kind, stagedPath, rows, token), token);
+                PublishExportFiles(stagingDirectory, fileName, token);
                 _status.Text = $"Exported {rows.Count:N0} result(s)";
             }
             finally
             {
-                if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, recursive: true);
+                TryDeleteDirectory(stagingDirectory);
             }
         }
         catch (OperationCanceledException) { _status.Text = "Export cancelled"; }
@@ -859,84 +819,123 @@ public sealed class MainForm : Form
         }
     }
 
-    private static void PublishExportFiles(string stagingDirectory, string destinationPath)
-    {
-        var destinationDirectory = Path.GetDirectoryName(destinationPath)!;
-        var stagedFiles = Directory.EnumerateFiles(stagingDirectory).ToArray();
-        var stagedNames = stagedFiles
-            .Select(Path.GetFileName)
-            .OfType<string>()
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    private static void PublishExportFiles(
+        string stagingDirectory,
+        string destinationPath,
+        CancellationToken cancellationToken) =>
+        ExportService.PublishFiles(stagingDirectory, destinationPath, cancellationToken);
 
-        // Move every staged file into the destination directory. If any single
-        // move fails the caller's finally block will clean the staging directory,
-        // and previously moved files remain valid because each destination file
-        // is overwritten in place only after the corresponding source fully exists.
-        foreach (var stagedFile in stagedFiles)
-        {
-            var destination = Path.Combine(destinationDirectory, Path.GetFileName(stagedFile));
-            File.Move(stagedFile, destination, overwrite: true);
-        }
-
-        // For multi-page PNG reports, remove continuation pages from prior exports
-        // that are no longer part of the report set so stale data cannot persist.
-        if (!string.Equals(Path.GetExtension(destinationPath), ".png", StringComparison.OrdinalIgnoreCase)) return;
-
-        var stem = Path.GetFileNameWithoutExtension(destinationPath);
-        foreach (var previousPage in Directory.EnumerateFiles(destinationDirectory, $"{stem}-*.png"))
-        {
-            var fileName = Path.GetFileName(previousPage);
-            if (stagedNames.Contains(fileName)) continue;
-            var pageStem = Path.GetFileNameWithoutExtension(previousPage);
-            var suffix = pageStem.Length > stem.Length + 1 ? pageStem[(stem.Length + 1)..] : string.Empty;
-            if (suffix.Length == 3 && int.TryParse(suffix, out var pageNumber) && pageNumber >= 2)
-                File.Delete(previousPage);
-        }
-    }
-
-    private void WriteExport(string kind, string path, List<ScanResult> rows)
+    private void WriteExport(
+        string kind,
+        string path,
+        List<ScanResult> rows,
+        CancellationToken cancellationToken)
     {
         switch (kind)
         {
-            case "CSV": File.WriteAllText(path, CsvReport.Create(rows), new UTF8Encoding(true)); break;
-            case "XML":
-                new XDocument(new XElement("PingFludResults", rows.Select(row => new XElement("Result",
-                    new XAttribute("target", row.Target), new XElement("Responding", row.Responding),
-                    new XElement("LatencyMs", row.RoundtripMs), new XElement("PacketLossPercent", row.PacketLossPercent),
-                    new XElement("Address", row.Address), new XElement("HostName", row.HostName),
-                    new XElement("Status", row.Status))))).Save(path);
+            case "CSV":
+                using (var writer = new StreamWriter(path, append: false, new UTF8Encoding(true)))
+                    CsvReport.Write(writer, rows, cancellationToken);
                 break;
-            case "HTML": File.WriteAllText(path, Html(rows, false), Encoding.UTF8); break;
-            case "XLS-compatible HTML": File.WriteAllText(path, Html(rows, true), Encoding.UTF8); break;
-            case "TXT": File.WriteAllLines(path,
-                rows.Select(row => $"{row.Target}\t{row.Address}\t{row.HostName}\t{row.Status}\t{row.RoundtripMs}")); break;
-            case "PDF": SimplePdf.Write(path, rows); break;
-            case "PNG image": ExportImages(path, rows); break;
+            case "XML":
+                using (var writer = XmlWriter.Create(path, new XmlWriterSettings { Indent = true, Encoding = new UTF8Encoding(true) }))
+                {
+                    writer.WriteStartDocument();
+                    writer.WriteStartElement("PingFludResults");
+                    foreach (var row in rows)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        writer.WriteStartElement("Result");
+                        writer.WriteAttributeString("target", row.Target);
+                        writer.WriteElementString("Responding", row.Responding.ToString(CultureInfo.InvariantCulture));
+                        writer.WriteElementString("LatencyMs", row.RoundtripMs?.ToString(CultureInfo.InvariantCulture));
+                        writer.WriteElementString("PacketLossPercent", row.PacketLossPercent.ToString(CultureInfo.InvariantCulture));
+                        writer.WriteElementString("Address", row.Address);
+                        writer.WriteElementString("HostName", row.HostName);
+                        writer.WriteElementString("Status", row.Status);
+                        writer.WriteEndElement();
+                    }
+                    writer.WriteEndElement();
+                    writer.WriteEndDocument();
+                }
+                break;
+            case "HTML": WriteHtml(path, rows, spreadsheet: false, cancellationToken); break;
+            case "XLS-compatible HTML": WriteHtml(path, rows, spreadsheet: true, cancellationToken); break;
+            case "TXT":
+                using (var writer = new StreamWriter(path, append: false, Encoding.UTF8))
+                {
+                    foreach (var row in rows)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        writer.Write(row.Target);
+                        writer.Write('\t');
+                        writer.Write(row.Address);
+                        writer.Write('\t');
+                        writer.Write(row.HostName);
+                        writer.Write('\t');
+                        writer.Write(row.Status);
+                        writer.Write('\t');
+                        writer.WriteLine(row.RoundtripMs?.ToString(CultureInfo.InvariantCulture) ?? string.Empty);
+                    }
+                }
+                break;
+            case "PDF": SimplePdf.Write(path, rows, cancellationToken); break;
+            case "PNG image": ExportImages(path, rows, cancellationToken); break;
         }
     }
 
-    private string Html(IEnumerable<ScanResult> rows, bool spreadsheet)
+    private void WriteHtml(
+        string path,
+        IEnumerable<ScanResult> rows,
+        bool spreadsheet,
+        CancellationToken cancellationToken)
     {
         string Encode(string value)
         {
-            if (spreadsheet && value.Length > 0 && value[0] is '=' or '+' or '-' or '@') value = "'" + value;
+            if (spreadsheet) value = ExportFormatting.NeutralizeSpreadsheetFormula(value);
             return WebUtility.HtmlEncode(value);
         }
         string Hex(Color color) => ColorTranslator.ToHtml(color);
-        return $"<!doctype html><meta charset=utf-8><title>Ping Flud Results</title>" +
-               $"<style>body{{font:14px Segoe UI;background:{Hex(_theme.WindowBackground)};color:{Hex(_theme.Foreground)}}}" +
-               $"table{{border-collapse:collapse;width:100%}}th,td{{padding:8px;border:1px solid {Hex(_theme.Border)}}}" +
-               $"th{{background:{Hex(_theme.SurfaceRaised)}}}tr:nth-child(even){{background:{Hex(_theme.GridAlternate)}}}" +
-               $".up{{color:{Hex(_theme.Success)}}}.down{{color:{Hex(_theme.Danger)}}}</style>" +
-               "<h1>Ping Flud Results</h1><table><tr><th>Target</th><th>Status</th><th>Latency</th><th>Loss %</th>" +
-               "<th>Replies</th><th>TTL</th><th>Address</th><th>Reverse DNS</th></tr>" +
-               string.Join("", rows.Select(row => $"<tr><td>{Encode(row.Target)}</td><td class='{(row.Responding ? "up" : "down")}'>{Encode(row.Status)}</td>" +
-                                                   $"<td>{row.RoundtripMs}</td><td>{row.PacketLossPercent:0.##}</td><td>{row.Successes}/{row.Attempts}</td>" +
-                                                   $"<td>{row.ReplyTtl}</td><td>{Encode(row.Address)}</td><td>{Encode(row.HostName)}</td></tr>")) +
-               "</table>";
+        using var writer = new StreamWriter(path, append: false, Encoding.UTF8);
+        writer.Write("<!doctype html><meta charset=utf-8><title>Ping Flud Results</title>");
+        writer.Write($"<style>body{{font:14px Segoe UI;background:{Hex(_theme.WindowBackground)};color:{Hex(_theme.Foreground)}}}" +
+                     $"table{{border-collapse:collapse;width:100%}}th,td{{padding:8px;border:1px solid {Hex(_theme.Border)}}}" +
+                     $"th{{background:{Hex(_theme.SurfaceRaised)}}}tr:nth-child(even){{background:{Hex(_theme.GridAlternate)}}}" +
+                     $".up{{color:{Hex(_theme.Success)}}}.down{{color:{Hex(_theme.Danger)}}}</style>");
+        writer.Write("<h1>Ping Flud Results</h1><table><tr><th>Target</th><th>Status</th><th>Latency</th><th>Loss %</th>" +
+                     "<th>Replies</th><th>TTL</th><th>Address</th><th>Reverse DNS</th></tr>");
+        foreach (var row in rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            writer.Write("<tr><td>");
+            writer.Write(Encode(row.Target));
+            writer.Write("</td><td class='");
+            writer.Write(row.Responding ? "up" : "down");
+            writer.Write("'>");
+            writer.Write(Encode(row.Status));
+            writer.Write("</td><td>");
+            writer.Write(row.RoundtripMs?.ToString(CultureInfo.InvariantCulture) ?? string.Empty);
+            writer.Write("</td><td>");
+            writer.Write(row.PacketLossPercent.ToString("0.##", CultureInfo.InvariantCulture));
+            writer.Write("</td><td>");
+            writer.Write(row.Successes.ToString(CultureInfo.InvariantCulture));
+            writer.Write('/');
+            writer.Write(row.Attempts.ToString(CultureInfo.InvariantCulture));
+            writer.Write("</td><td>");
+            writer.Write(row.ReplyTtl?.ToString(CultureInfo.InvariantCulture) ?? string.Empty);
+            writer.Write("</td><td>");
+            writer.Write(Encode(row.Address));
+            writer.Write("</td><td>");
+            writer.Write(Encode(row.HostName));
+            writer.Write("</td></tr>");
+        }
+        writer.Write("</table>");
     }
 
-    private void ExportImages(string path, IReadOnlyList<ScanResult> rows)
+    private void ExportImages(
+        string path,
+        IReadOnlyList<ScanResult> rows,
+        CancellationToken cancellationToken)
     {
         // Cap rows per page so each bitmap stays under ~64 MiB (1600x2600 at 32bpp).
         // 100 rows × 24px = 2400px height + 34px header = 2434px → ~15.6 MiB per page.
@@ -946,6 +945,7 @@ public sealed class MainForm : Form
         var stem = Path.GetFileNameWithoutExtension(path);
         for (var page = 0; page < pageCount; page++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var chunk = rows.Skip(page * rowsPerImage).Take(rowsPerImage).ToList();
             var output = page == 0 ? path : Path.Combine(directory, $"{stem}-{page + 1:000}.png");
             using var bitmap = new Bitmap(width, headerHeight + chunk.Count * rowHeight);
@@ -1064,7 +1064,7 @@ public sealed class MainForm : Form
         _startButton.Enabled = !scanning;
         _stopButton.Enabled = scanning;
         _targets.Enabled = !scanning;
-        ApplyButtonStyles();
+        UpdateResultsPresentation();
     }
 
     private void ApplyToolStripColors(ToolStripItemCollection items)

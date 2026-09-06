@@ -144,6 +144,22 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task ExportFailureIsReportedAndResetsState()
+    {
+        var model = new MainViewModel(new FakeScanRunner(
+            new ScanResult("host", true, 12, "host.example", "10.0.0.1", "Responding", 1, 1, 0, 64)))
+        { Targets = "host" };
+        await model.StartScanAsync();
+        model.ExportPath = " ";
+
+        await ((AsyncRelayCommand)model.ExportCommand).ExecuteAsync();
+
+        Assert.Equal("Export failed", model.Status);
+        Assert.False(model.IsExporting);
+        Assert.True(model.CanStart);
+    }
+
+    [Fact]
     public void ExportCommandCannotRunWithoutResults()
     {
         var model = new MainViewModel(new FakeScanRunner()) { Targets = "host" };
